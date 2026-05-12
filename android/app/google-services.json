@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "637711215349",
+    "project_id": "drivecareplus",
+    "storage_bucket": "drivecareplus.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:637711215349:android:d7ddde83b37d2b6c51f3bc",
+        "android_client_info": {
+          "package_name": "com.example.drive_care_plus"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQSuYzTUOE8jEYc6TEblgWYJbUbI89s7Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

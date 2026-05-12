@@ -1,0 +1,75 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Local properties & SDK paths (Prevents personal build paths from breaking other systems)
+/android/local.properties
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/windows/flutter/ephemeral/
+/windows/flutter/Generated.xcconfig
+/windows/flutter/flutter_layout_wind.props
+/windows/flutter/flutter_export_environment.sh
+/macos/Flutter/ephemeral/
+/macos/Flutter/Generated.xcconfig
+/macos/Flutter/flutter_export_environment.sh
+/linux/flutter/ephemeral/
+/linux/flutter/Generated.xcconfig
+
+# iOS Pods & Symlinks
+**/ios/Pods/
+**/ios/.symlinks/
+
+# Security, Keystores & Signing Files (NEVER push these to GitHub!)
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+android/key.properties
+key.properties
+.env
+.env.*
+
