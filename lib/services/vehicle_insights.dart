@@ -45,6 +45,13 @@ class VehicleInsights extends ChangeNotifier {
   List<Map<String, dynamic>> get bookings => _bookings;
   List<Map<String, dynamic>> get documents => _documents;
 
+  // Active bookings list alias for Cockpit tab compatibility
+  List<Map<String, dynamic>> get activeBookings => _bookings;
+
+  // Compatibility aliases for customized vehicle health gauges
+  double get kmUntilServiceInstance => kmUntilService;
+  int get predictedServiceDueDaysInstance => predictedServiceDueDays;
+
   double get kmUntilService {
     final difference = _nextServiceMileageKm - _currentMileageKm;
     return difference < 0 ? 0 : difference;
@@ -156,7 +163,7 @@ class VehicleInsights extends ChangeNotifier {
   Future<void> loadFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-       _model = prefs.getString('vehicle_model') ?? 'Perodua Axia';
+      _model = prefs.getString('vehicle_model') ?? 'Perodua Axia';
       _plate = prefs.getString('vehicle_plate') ?? 'ABC 1234';
       _fuelType = prefs.getString('vehicle_fuelType') ?? 'Petrol';
       _currentMileageKm = prefs.getDouble('vehicle_currentMileageKm') ?? 38200;
@@ -245,4 +252,3 @@ class VehicleInsights extends ChangeNotifier {
     return liters * pricePerLiter;
   }
 }
-
