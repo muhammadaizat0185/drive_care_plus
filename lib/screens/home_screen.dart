@@ -9,6 +9,7 @@ import 'booking_screen.dart';
 import 'document_vault_screen.dart';
 import 'notifications_screen.dart';
 import 'refuel_log_screen.dart';
+import 'settings_screen.dart';
 import 'vehicle_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -90,6 +91,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPressed: () => Navigator.pushNamed(context, NotificationsScreen.routeName),
                     icon: const Icon(Icons.notifications_outlined, color: Color(0xFF1F2937)),
                     tooltip: 'Notifications',
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pushNamed(context, SettingsScreen.routeName),
+                    icon: const Icon(Icons.settings_outlined, color: Color(0xFF1F2937)),
+                    tooltip: 'Settings',
                   ),
                 ],
               )
@@ -264,7 +270,7 @@ class _HomeCockpitBody extends StatelessWidget {
             listenable: VehicleInsights.instance,
             builder: (context, child) {
               final insights = VehicleInsights.instance;
-              final bookings = insights.bookings;
+              final bookings = insights.activeBookings;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

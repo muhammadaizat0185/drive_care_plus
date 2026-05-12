@@ -11,7 +11,7 @@ class VehicleHealthGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final insights = VehicleInsights.instance;
-    final kmLeft = insights.kmUntilService;
+    final kmLeft = insights.kmUntilServiceInstance;
     final totalInterval = 10000.0; // Standard service interval 10,000 km
     final rawPercentage = (kmLeft / totalInterval).clamp(0.0, 1.0);
     final displayPercentage = (rawPercentage * 100).toInt();
@@ -136,7 +136,7 @@ class VehicleHealthGauge extends StatelessWidget {
                         const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
                         const SizedBox(width: 6),
                         Text(
-                          '~${insights.predictedServiceDueDays} Days left',
+                          '~${insights.predictedServiceDueDaysInstance} Days left',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -295,9 +295,7 @@ class _HealthGaugePainter extends CustomPainter {
     final startAngle = -pi / 2;
     final sweepAngle = 2 * pi * percentage;
 
-    // Draw glowing underlay using standard drawing coordinates, wait: we can apply image blur
-    // or draw blurred arc cleanly. To be extremely robust across all platforms without depending on complex canvassing:
-    // we draw slightly wider opacity circles/arcs to capture a natural emitted glow layer!
+    // Draw glowing underlay
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       startAngle,
