@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/workshop.dart';
+import '../services/vehicle_insights.dart';
 import '../widgets/star_rating.dart';
 
 class WorkshopDetailScreen extends StatefulWidget {
@@ -239,6 +240,18 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
     final dateStr = '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}';
     final timeStr = _selectedTime!.format(context);
+
+    // Save locally to reactive cache
+    final newBooking = {
+      'workshopId': widget.workshop.id,
+      'workshopName': widget.workshop.name,
+      'serviceName': service.name,
+      'servicePrice': service.price,
+      'date': dateStr,
+      'time': timeStr,
+      'status': 'Confirmed',
+    };
+    VehicleInsights.instance.addBooking(newBooking);
 
     // Show booking animation success dialog
     showDialog(

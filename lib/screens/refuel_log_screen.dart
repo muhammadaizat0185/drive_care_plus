@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/vehicle_insights.dart';
+import '../widgets/eco_insights_card.dart';
+import '../widgets/fuel_chart.dart';
 
 class RefuelLogScreen extends StatefulWidget {
   const RefuelLogScreen({super.key});
@@ -136,7 +138,17 @@ class _RefuelLogScreenState extends State<RefuelLogScreen> {
             value:
                 'RM ${totalCost.toStringAsFixed(2)} total • RM ${costPerKm.toStringAsFixed(2)}/km',
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          EcoInsightsCard(kmPerLiter: kmPerLiter),
+          const SizedBox(height: 16),
+          FuelChart(
+            dataPoints: _history
+                .map((h) => (h['efficiency'] as num).toDouble())
+                .toList()
+                .reversed
+                .toList(),
+          ),
+          const SizedBox(height: 16),
           Text(
             'Refuel History Log',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(

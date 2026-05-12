@@ -63,11 +63,11 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
     final finalSeconds = _secondsElapsed;
     final finalCost = _fuelCostRm;
 
-    // Save in-memory for immediate dashboard synchronization
-    VehicleInsights.recentTripDistanceKm = finalDistance;
-    VehicleInsights.recentTripFuelCostRm = finalCost;
-    // Also add to vehicle mileage
-    VehicleInsights.currentMileageKm += finalDistance;
+    // Save locally, update cache and notify listeners reactively!
+    await VehicleInsights.instance.updateRecentTrip(
+      distanceKm: finalDistance,
+      fuelCostRm: finalCost,
+    );
 
     // Show Trip Summary Dialog
     _showTripSummaryDialog(finalDistance, finalSeconds, finalCost);
@@ -93,7 +93,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
             .collection('vehicle')
             .doc('primary')
             .update({
-          'currentMileageKm': VehicleInsights.currentMileageKm,
+          'currentMileageKm': VehicleInsights.instance.currentMileageKm,
         });
       } catch (e) {
         debugPrint('Firestore trip save error: $e');
@@ -221,7 +221,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
             leading: const Icon(Icons.analytics_outlined),
             title: const Text('Predictive service estimate'),
             subtitle: Text(
-              'Average ${VehicleInsights.averageDailyDistanceKm.toStringAsFixed(0)} km/day, service due in about ${VehicleInsights.predictedServiceDueDays} days.',
+              'Average ${VehicleInsights.instance.averageDailyDistanceKm.toStringAsFixed(0)} km/day, service due in about ${VehicleInsights.instance.predictedServiceDueDays} days.',
             ),
           ),
           const SizedBox(height: 12),
