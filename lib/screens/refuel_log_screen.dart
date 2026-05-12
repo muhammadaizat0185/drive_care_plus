@@ -68,9 +68,10 @@ class _RefuelLogScreenState extends State<RefuelLogScreen> {
     final costPerKm = _distanceKm <= 0 ? 0 : totalCost / _distanceKm;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Refuel Log')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         children: [
           Card(
             child: Padding(

@@ -10,6 +10,7 @@ class VehicleHealthGauge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final insights = VehicleInsights.instance;
     final kmLeft = insights.kmUntilServiceInstance;
     final totalInterval = 10000.0; // Standard service interval 10,000 km
@@ -31,12 +32,12 @@ class VehicleHealthGauge extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Car Health',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1F2937), // Point 3: Charcoal soft contrast
+                      color: isDark ? Colors.white : const Color(0xFF1F2937), // Point 3: Charcoal soft contrast
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -94,7 +95,9 @@ class VehicleHealthGauge extends StatelessWidget {
                           style: TextStyle(
                             fontWeight: FontWeight.w900,
                             fontSize: 20,
-                            color: isCritical ? Colors.red : const Color(0xFF1F2937),
+                            color: isCritical
+                                ? Colors.red
+                                : (isDark ? Colors.white : const Color(0xFF1F2937)),
                           ),
                         ),
                         const Text(
@@ -119,10 +122,10 @@ class VehicleHealthGauge extends StatelessWidget {
                   children: [
                     Text(
                       '${kmLeft.toStringAsFixed(0)} km',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF1F2937), // Point 3: Charcoal soft contrast
+                        color: isDark ? Colors.white : const Color(0xFF1F2937), // Point 3: Charcoal soft contrast
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -137,10 +140,10 @@ class VehicleHealthGauge extends StatelessWidget {
                         const SizedBox(width: 6),
                         Text(
                           '~${insights.predictedServiceDueDaysInstance} Days left',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: Colors.black54,
+                            color: isDark ? Colors.white70 : Colors.black54,
                           ),
                         ),
                       ],

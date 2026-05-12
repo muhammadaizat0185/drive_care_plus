@@ -2,6 +2,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+import '../services/profile_service.dart';
 import '../services/vehicle_insights.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/vehicle_health_gauge.dart';
@@ -59,42 +60,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Point 2: Radial/Linear gradient background depth wrapper (light mint fresh to soft grey)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final charcoalColor = isDark ? Colors.white : const Color(0xFF1F2937);
+
+    // Point 2: Radial/Linear gradient background depth wrapper
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFFEFFDF5), // Soft pastel mint
-            Color(0xFFF9FAFB), // Soft premium grey
-          ],
+          colors: isDark
+              ? [
+                  const Color(0xFF0F172A), // Deep Slate Dark
+                  const Color(0xFF022C22), // Deep Obsidian Dark Green
+                ]
+              : [
+                  const Color(0xFFEFFDF5), // Soft pastel mint
+                  const Color(0xFFF9FAFB), // Soft premium grey
+                ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
       ),
       child: Scaffold(
+        extendBody: true,
         backgroundColor: Colors.transparent, // Allows underlying gradient to shine through!
         // Keep main DriveCare+ appbar only on Cockpit tab
         appBar: _currentIndex == 0
             ? AppBar(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
-                title: const Text(
+                title: Text(
                   'DriveCare+',
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.8,
-                    color: Color(0xFF1F2937), // Point 3: Premium Soft Contrast Dark Charcoal text
+                    color: charcoalColor,
                   ),
                 ),
                 actions: [
                   IconButton(
                     onPressed: () => Navigator.pushNamed(context, NotificationsScreen.routeName),
-                    icon: const Icon(Icons.notifications_outlined, color: Color(0xFF1F2937)),
+                    icon: Icon(Icons.notifications_outlined, color: charcoalColor),
                     tooltip: 'Notifications',
                   ),
                   IconButton(
                     onPressed: () => Navigator.pushNamed(context, SettingsScreen.routeName),
-                    icon: const Icon(Icons.settings_outlined, color: Color(0xFF1F2937)),
+                    icon: Icon(Icons.settings_outlined, color: charcoalColor),
                     tooltip: 'Settings',
                   ),
                 ],
@@ -107,17 +117,21 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.85),
+                color: isDark
+                    ? const Color(0xFF1E293B).withOpacity(0.65)
+                    : Colors.white.withOpacity(0.85),
                 borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(15),
+                    color: isDark ? Colors.black38 : Colors.black.withAlpha(15),
                     blurRadius: 24,
                     offset: const Offset(0, 10),
                   ),
                 ],
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.5),
+                  color: isDark
+                      ? Colors.white.withOpacity(0.15)
+                      : Colors.white.withOpacity(0.5),
                   width: 1.0,
                 ),
               ),
@@ -139,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       elevation: 0,
                       type: BottomNavigationBarType.fixed,
                       selectedItemColor: Theme.of(context).colorScheme.primary,
-                      unselectedItemColor: Colors.grey.shade400,
+                      unselectedItemColor: isDark ? Colors.white38 : Colors.grey.shade400,
                       selectedLabelStyle: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 10,
@@ -210,55 +224,64 @@ class _HomeCockpitBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 110),
         children: [
           // Greeting Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ListenableBuilder(
+            listenable: ProfileService.instance,
+            builder: (context, child) {
+              final profile = ProfileService.instance;
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Hello, Driver! 👋',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.6,
-                      color: const Color(0xFF1F2937), // Point 3: Premium Soft Contrast Charcoal
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Hello, ${profile.displayName}! 👋',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.6,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : const Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Welcome to your vehicle center',
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 13,
+                          letterSpacing: 0.5, // Point 3: Extended Subheader spacing
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Welcome to your vehicle center',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 13,
-                      letterSpacing: 0.5, // Point 3: Extended Subheader spacing
+                  GestureDetector(
+                    onTap: () => _navigateTo(context, VehicleScreen.routeName),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.primary.withAlpha(80),
+                          width: 2.0,
+                        ),
+                      ),
+                      child: CircleAvatar(
+                        radius: 22,
+                        backgroundImage: NetworkImage(profile.photoUrl),
+                        backgroundColor: Colors.grey,
+                      ),
                     ),
                   ),
                 ],
-              ),
-              GestureDetector(
-                onTap: () => _navigateTo(context, VehicleScreen.routeName),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.primary.withAlpha(80),
-                      width: 2.0,
-                    ),
-                  ),
-                  child: const CircleAvatar(
-                    radius: 22,
-                    backgroundImage: NetworkImage('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'),
-                    backgroundColor: Colors.grey,
-                  ),
-                ),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 28), // Point 5: Spacing breathability
 
@@ -294,27 +317,30 @@ class _HomeCockpitBody extends StatelessWidget {
                             color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
-                        title: const Text(
+                         title: Text(
                           'Upcoming Appointment',
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 14,
-                            color: Color(0xFF1F2937), // Point 3: Charcoal soft contrast
+                            color: isDark ? Colors.white : const Color(0xFF1F2937), // Point 3: Charcoal soft contrast
                           ),
                         ),
                         subtitle: Padding(
                           padding: const EdgeInsets.only(top: 6.0),
                           child: Text(
                             '${bookings.first['workshopName']}\n${bookings.first['serviceName']} • ${bookings.first['date']} at ${bookings.first['time']}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: Colors.black54,
+                              color: isDark ? Colors.white70 : Colors.black54,
                               height: 1.4,
                             ),
                           ),
                         ),
                         isThreeLine: true,
-                        trailing: const Icon(Icons.chevron_right, color: Color(0xFF1F2937)),
+                        trailing: Icon(
+                          Icons.chevron_right,
+                          color: isDark ? Colors.white70 : const Color(0xFF1F2937),
+                        ),
                         onTap: () => _navigateTo(context, BookingScreen.routeName),
                       ),
                     ),

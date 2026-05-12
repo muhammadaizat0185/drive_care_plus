@@ -15,6 +15,7 @@ class BookingScreen extends StatelessWidget {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           title: const Text('Workshops & Bookings', style: TextStyle(fontWeight: FontWeight.bold)),
           bottom: const TabBar(
@@ -71,6 +72,7 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     // Filter logic
     final workshops = MarketplaceRepository.workshops.where((w) {
       final matchesSearch = w.name.toLowerCase().contains(searchQuery.toLowerCase());
@@ -84,7 +86,7 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
     }).toList();
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
       children: [
         // 1. Welcome / Header (Figma style)
         Text(
@@ -93,6 +95,7 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
                 fontWeight: FontWeight.w900,
                 height: 1.2,
                 letterSpacing: -0.5,
+                color: isDark ? Colors.white : const Color(0xFF1F2937),
               ),
         ),
         const SizedBox(height: 16),
@@ -100,17 +103,18 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
         // 2. Search Bar
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(8),
+                color: isDark ? Colors.black26 : Colors.black.withAlpha(8),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
           child: TextField(
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
             onChanged: (val) {
               setState(() {
                 searchQuery = val;
@@ -118,9 +122,10 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
             },
             decoration: InputDecoration(
               hintText: 'Search services, workshops...',
+              hintStyle: const TextStyle(color: Colors.grey),
               prefixIcon: const Icon(Icons.search, color: Colors.grey),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: Colors.transparent,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(20),
                 borderSide: BorderSide.none,
@@ -135,9 +140,13 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
         const SizedBox(height: 24),
 
         // 3. Service Categories Row
-        const Text(
+        Text(
           'Service Categories',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: isDark ? Colors.white70 : Colors.black87,
+          ),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -192,9 +201,13 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Top Brands Support',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
             ),
             TextButton(onPressed: () {}, child: const Text('See All', style: TextStyle(fontSize: 12))),
           ],
@@ -211,16 +224,18 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.black.withAlpha(10)),
+                  border: Border.all(
+                    color: isDark ? Colors.white12 : Colors.black.withAlpha(10),
+                  ),
                 ),
                 child: Text(
                   brand,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black54,
+                    color: isDark ? Colors.white70 : Colors.black54,
                   ),
                 ),
               );
@@ -237,7 +252,11 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
               searchQuery.isNotEmpty || selectedCategory != 'All'
                   ? 'Found (${workshops.length}) Workshops'
                   : 'Top Recommended Workshops',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
             ),
           ],
         ),
@@ -412,6 +431,7 @@ class _WorkshopCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final lowestPrice = workshop.services
         .map((service) => service.price)
         .reduce((value, element) => value < element ? value : element);
@@ -420,7 +440,9 @@ class _WorkshopCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.black.withAlpha(10)),
+        side: BorderSide(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withAlpha(10),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -455,7 +477,7 @@ class _WorkshopCard extends StatelessWidget {
                         workshop.name,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: Colors.black87,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
                       ),
                     ],
@@ -505,11 +527,11 @@ class _WorkshopCard extends StatelessWidget {
             const SizedBox(height: 12),
             RichText(
               text: TextSpan(
-                style: const TextStyle(color: Colors.black87, fontSize: 13),
+                style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontSize: 13),
                 children: [
                   const TextSpan(text: 'Services from ', style: TextStyle(color: Colors.grey)),
                   TextSpan(
-                    text: 'RM ${lowestPrice.toStringAsFixed(0)}',
+                     text: 'RM ${lowestPrice.toStringAsFixed(0)}',
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       color: Theme.of(context).colorScheme.primary,

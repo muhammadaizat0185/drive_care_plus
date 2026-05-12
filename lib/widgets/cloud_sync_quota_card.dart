@@ -76,6 +76,7 @@ class _CloudSyncQuotaCardState extends State<CloudSyncQuotaCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = FirebaseAuth.instance.currentUser;
     final isConnected = user != null;
 
@@ -104,12 +105,12 @@ class _CloudSyncQuotaCardState extends State<CloudSyncQuotaCard> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Firebase Live Quota',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1F2937),
+                      color: isDark ? Colors.white : const Color(0xFF1F2937),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -202,6 +203,7 @@ class _QuotaProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -217,7 +219,11 @@ class _QuotaProgressBar extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '${used.toStringAsFixed(0)} / ${total.toStringAsFixed(0)} $unit',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
             ),
           ],
         ),
