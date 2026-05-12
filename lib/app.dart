@@ -9,6 +9,7 @@ import 'screens/maintenance_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/refuel_log_screen.dart';
 import 'screens/register_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/trip_tracking_screen.dart';
 import 'screens/vehicle_screen.dart';
@@ -44,6 +45,7 @@ class DriveCarePlusApp extends StatelessWidget {
             WorkshopMapScreen.routeName: (_) => const WorkshopMapScreen(),
             DocumentVaultScreen.routeName: (_) => const DocumentVaultScreen(),
             NotificationsScreen.routeName: (_) => const NotificationsScreen(),
+            SettingsScreen.routeName: (_) => const SettingsScreen(),
           },
         );
       },
