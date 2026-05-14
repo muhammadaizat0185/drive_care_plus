@@ -14,19 +14,22 @@ class StarRating extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Safety check for non-finite ratings
+    final displayRating = rating.isFinite ? rating : 0.0;
+    
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var index = 1; index <= 5; index++)
           Icon(
-            index <= rating.round() ? Icons.star : Icons.star_border,
+            index <= displayRating.round() ? Icons.star : Icons.star_border,
             size: size,
             color: Theme.of(context).colorScheme.secondary,
           ),
         if (showValue) ...[
           const SizedBox(width: 6),
           Text(
-            rating.toStringAsFixed(1),
+            displayRating.toStringAsFixed(1),
             style: Theme.of(context).textTheme.labelLarge,
           ),
         ],

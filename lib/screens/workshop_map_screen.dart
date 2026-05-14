@@ -1,205 +1,248 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../services/marketplace_repository.dart';
+import '../services/google_maps_service.dart';
+import '../models/workshop.dart';
 import 'workshop_detail_screen.dart';
 
-class WorkshopMapScreen extends StatelessWidget {
+class WorkshopMapScreen extends StatefulWidget {
   const WorkshopMapScreen({super.key});
 
   static const routeName = '/workshop-map';
 
   @override
+  State<WorkshopMapScreen> createState() => _WorkshopMapScreenState();
+}
+
+class _WorkshopMapScreenState extends State<WorkshopMapScreen> {
+  double _radiusKm = 5.0;
+  List<Workshop> _workshops = [];
+  bool _isLoading = false;
+  Position? _currentPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocationAndSearch();
+  }
+
+  Future<void> _getCurrentLocationAndSearch() async {
+    setState(() => _isLoading = true);
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      setState(() => _currentPosition = position);
+      
+      await _searchWorkshops();
+    } catch (e) {
+      debugPrint('Location Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _searchWorkshops() async {
+    if (_currentPosition == null) return;
+    
+    setState(() => _isLoading = true);
+    final results = await GoogleMapsService.searchNearbyWorkshops(
+      LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+      _radiusKm,
+    );
+
+    setState(() {
+      _workshops = results.map((json) => Workshop.fromGooglePlace(json)).toList();
+      _isLoading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Workshop Map')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      appBar: AppBar(
+        title: const Text('Workshop Discovery'),
+        actions: [
+          IconButton(
+            onPressed: _getCurrentLocationAndSearch,
+            icon: const Icon(Icons.my_location),
+          ),
+        ],
+      ),
+      body: Column(
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Nearby Workshops',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Dummy map view. Later this becomes Google Maps with live location and markers.',
-                  ),
-                  const SizedBox(height: 16),
-                  AspectRatio(
-                    aspectRatio: 1.25,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.black.withValues(alpha: 0.06),
+          // Proximity Slider Card
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Search Radius',
+                          style: TextStyle(fontWeight: FontWeight.bold),
                         ),
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _MapGridPainter(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          const Align(
-                            alignment: Alignment(0.05, 0.25),
-                            child: _UserDot(),
-                          ),
-                          _WorkshopMarker(
-                            alignment: const Alignment(-0.55, -0.35),
-                            index: 0,
-                            onTap: () => _openWorkshop(context, 0),
-                          ),
-                          _WorkshopMarker(
-                            alignment: const Alignment(0.52, -0.2),
-                            index: 1,
-                            onTap: () => _openWorkshop(context, 1),
-                          ),
-                          _WorkshopMarker(
-                            alignment: const Alignment(0.25, 0.68),
-                            index: 2,
-                            onTap: () => _openWorkshop(context, 2),
-                          ),
-                        ],
-                      ),
+                        Text(
+                          '${_radiusKm.toInt()} km',
+                          style: TextStyle(color: primaryColor, fontWeight: FontWeight.w900),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    Slider(
+                      value: _radiusKm,
+                      min: 1,
+                      max: 50,
+                      divisions: 49,
+                      label: '${_radiusKm.toInt()} km',
+                      onChanged: (val) {
+                        setState(() => _radiusKm = val);
+                      },
+                      onChangeEnd: (val) {
+                        _searchWorkshops();
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          for (
-            var index = 0;
-            index < MarketplaceRepository.workshops.length;
-            index++
-          )
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.location_on_outlined),
-                title: Text(MarketplaceRepository.workshops[index].name),
-                subtitle: Text(MarketplaceRepository.workshops[index].distance),
-                trailing: TextButton(
-                  onPressed: () => _showDirections(context, index),
-                  child: const Text('Directions'),
-                ),
-                onTap: () => _openWorkshop(context, index),
-              ),
-            ),
+
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _workshops.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off, size: 64, color: isDark ? Colors.white24 : Colors.black12),
+                            const SizedBox(height: 16),
+                            const Text('No workshops found in this area.'),
+                            TextButton(
+                              onPressed: _searchWorkshops,
+                              child: const Text('Try Again'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _workshops.length,
+                        itemBuilder: (context, index) {
+                          final workshop = _workshops[index];
+                          return _WorkshopSummaryCard(workshop: workshop);
+                        },
+                      ),
+          ),
         ],
       ),
     );
   }
-
-  void _openWorkshop(BuildContext context, int index) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkshopDetailScreen(
-          workshop: MarketplaceRepository.workshops[index],
-        ),
-      ),
-    );
-  }
-
-  void _showDirections(BuildContext context, int index) {
-    final workshop = MarketplaceRepository.workshops[index];
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Directions placeholder: launch Google Maps/Waze to ${workshop.name}.',
-        ),
-      ),
-    );
-  }
 }
 
-class _WorkshopMarker extends StatelessWidget {
-  const _WorkshopMarker({
-    required this.alignment,
-    required this.index,
-    required this.onTap,
-  });
+class _WorkshopSummaryCard extends StatelessWidget {
+  final Workshop workshop;
 
-  final Alignment alignment;
-  final int index;
-  final VoidCallback onTap;
+  const _WorkshopSummaryCard({required this.workshop});
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: alignment,
-      child: IconButton.filled(
-        onPressed: onTap,
-        icon: const Icon(Icons.build_outlined),
-        tooltip: MarketplaceRepository.workshops[index].name,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => WorkshopDetailScreen(workshop: workshop),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.build_circle_outlined, color: primaryColor, size: 30),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      workshop.name,
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      workshop.address,
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.star, size: 14, color: Colors.amber.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          workshop.rating.toString(),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '(${workshop.reviewCount})',
+                          style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey.shade400),
+            ],
+          ),
+        ),
       ),
     );
-  }
-}
-
-class _UserDot extends StatelessWidget {
-  const _UserDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: BoxDecoration(
-        color: Colors.blue,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 3),
-      ),
-    );
-  }
-}
-
-class _MapGridPainter extends CustomPainter {
-  const _MapGridPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final roadPaint = Paint()
-      ..color = color.withValues(alpha: 0.24)
-      ..strokeWidth = 8
-      ..strokeCap = StrokeCap.round;
-    final minorRoadPaint = Paint()
-      ..color = color.withValues(alpha: 0.12)
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawLine(
-      Offset(size.width * 0.1, size.height * 0.2),
-      Offset(size.width * 0.9, size.height * 0.74),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.18, size.height * 0.82),
-      Offset(size.width * 0.82, size.height * 0.16),
-      minorRoadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.08, size.height * 0.52),
-      Offset(size.width * 0.92, size.height * 0.48),
-      minorRoadPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapGridPainter oldDelegate) {
-    return oldDelegate.color != color;
   }
 }

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/workshop.dart';
-import '../services/marketplace_repository.dart';
+import '../services/google_maps_service.dart';
 import '../services/vehicle_insights.dart';
+import '../widgets/glass_container.dart';
 import 'workshop_detail_screen.dart';
 
 class BookingScreen extends StatelessWidget {
@@ -12,29 +16,48 @@ class BookingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Workshops & Bookings', style: TextStyle(fontWeight: FontWeight.bold)),
-          bottom: const TabBar(
-            tabs: [
-              Tab(
-                icon: Icon(Icons.storefront_outlined),
-                text: 'Find Workshops',
-              ),
-              Tab(
-                icon: Icon(Icons.event_available_outlined),
-                text: 'My Bookings',
-              ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [
+                  const Color(0xFF0F172A), // Deep Slate Dark
+                  const Color(0xFF022C22), // Deep Obsidian Dark Green
+                ]
+              : [
+                  const Color(0xFFEFFDF5), // Soft pastel mint
+                  const Color(0xFFF9FAFB), // Soft premium grey
+                ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: const Text('Workshops & Bookings', style: TextStyle(fontWeight: FontWeight.bold)),
+            bottom: const TabBar(
+              tabs: [
+                Tab(
+                  icon: Icon(Icons.storefront_outlined),
+                  text: 'Find Workshops',
+                ),
+                Tab(
+                  icon: Icon(Icons.event_available_outlined),
+                  text: 'My Bookings',
+                ),
+              ],
+            ),
+          ),
+          body: const TabBarView(
+            children: [
+              _FindWorkshopsTab(),
+              _MyBookingsTab(),
             ],
           ),
-        ),
-        body: const TabBarView(
-          children: [
-            _FindWorkshopsTab(),
-            _MyBookingsTab(),
-          ],
         ),
       ),
     );
@@ -51,6 +74,10 @@ class _FindWorkshopsTab extends StatefulWidget {
 class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
   String selectedCategory = 'All';
   String searchQuery = '';
+  double maxDistance = 5.0;
+  List<Workshop> workshops = [];
+  bool isLoading = false;
+  Position? currentPosition;
 
   final List<Map<String, dynamic>> categories = [
     {'name': 'All', 'icon': Icons.grid_view_rounded},
@@ -60,57 +87,114 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
     {'name': 'Wash', 'icon': Icons.local_car_wash_rounded},
   ];
 
-  final List<String> brands = [
-    'Bridgestone',
-    'Michelin',
-    'Dunlop',
-    'Yokohama',
-    'Perodua',
-    'Proton',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocationAndSearch();
+  }
+
+  Future<void> _getCurrentLocationAndSearch() async {
+    setState(() => isLoading = true);
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      setState(() => currentPosition = position);
+      
+      await _searchWorkshops();
+    } catch (e) {
+      debugPrint('Location Error: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _searchWorkshops() async {
+    if (currentPosition == null) return;
+    
+    setState(() => isLoading = true);
+    
+    List<String>? includedTypes;
+    if (selectedCategory == 'Repairer') includedTypes = ['car_repair'];
+    else if (selectedCategory == 'Maintenance') includedTypes = ['car_repair'];
+    else if (selectedCategory == 'Tires') includedTypes = ['car_repair'];
+    else if (selectedCategory == 'Wash') includedTypes = ['car_wash'];
+
+    final results = await GoogleMapsService.searchNearbyWorkshops(
+      LatLng(currentPosition!.latitude, currentPosition!.longitude),
+      maxDistance,
+      includedTypes: includedTypes,
+    );
+
+    if (mounted) {
+      setState(() {
+        workshops = results.map((json) {
+          final w = Workshop.fromGooglePlace(json);
+          if (w.location != null && currentPosition != null) {
+            final dist = Geolocator.distanceBetween(
+              currentPosition!.latitude,
+              currentPosition!.longitude,
+              w.location!.latitude,
+              w.location!.longitude,
+            );
+            final km = dist / 1000;
+            return Workshop(
+              id: w.id,
+              name: w.name,
+              address: w.address,
+              rating: w.rating,
+              reviewCount: w.reviewCount,
+              location: w.location,
+              isGooglePlace: true,
+              openingHours: w.openingHours,
+              distance: '${km.toStringAsFixed(1)} km',
+              distanceValue: km,
+              types: w.types,
+              isOpenNow: w.isOpenNow,
+            );
+          }
+          return w;
+        }).toList();
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Filter logic
-    final workshops = MarketplaceRepository.workshops.where((w) {
-      final matchesSearch = w.name.toLowerCase().contains(searchQuery.toLowerCase());
-      if (selectedCategory == 'All') return matchesSearch;
-      // Simple tag matches
-      final isTire = selectedCategory == 'Tires' && w.name.toLowerCase().contains('tire');
-      final isRepair = selectedCategory == 'Repairer' && (w.name.toLowerCase().contains('care') || w.name.toLowerCase().contains('mechanic'));
-      final isMaintenance = selectedCategory == 'Maintenance' && (w.name.toLowerCase().contains('service') || w.name.toLowerCase().contains('auto'));
-      final isWash = selectedCategory == 'Wash' && w.name.toLowerCase().contains('wash');
-      return matchesSearch && (isTire || isRepair || isMaintenance || isWash || selectedCategory == 'All');
-    }).toList();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
       children: [
-        // 1. Welcome / Header (Figma style)
         Text(
           'Choose the best\nservice for you',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w900,
                 height: 1.2,
                 letterSpacing: -0.5,
+                color: isDark ? Colors.white : const Color(0xFF1F2937),
               ),
         ),
         const SizedBox(height: 16),
 
-        // 2. Search Bar
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(8),
+                color: isDark ? Colors.black26 : Colors.black.withAlpha(8),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
           child: TextField(
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
             onChanged: (val) {
               setState(() {
                 searchQuery = val;
@@ -118,34 +202,66 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
             },
             decoration: InputDecoration(
               hintText: 'Search services, workshops...',
+              hintStyle: const TextStyle(color: Colors.grey),
               prefixIcon: const Icon(Icons.search, color: Colors.grey),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: Colors.transparent,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(20),
                 borderSide: BorderSide.none,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
 
-        // 3. Service Categories Row
-        const Text(
+        Row(
+          children: [
+            Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Within ${maxDistance.toInt()} km',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+            Expanded(
+              child: Slider(
+                value: maxDistance,
+                min: 1.0,
+                max: 50.0,
+                divisions: 49,
+                label: '${maxDistance.toInt()} km',
+                onChanged: (val) {
+                  setState(() => maxDistance = val);
+                },
+                onChangeEnd: (val) {
+                  _searchWorkshops();
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        Text(
           'Service Categories',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: isDark ? Colors.white70 : Colors.black87,
+            letterSpacing: -0.2,
+          ),
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 90,
+          height: 115,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: categories.length,
-            separatorBuilder: (_, index) => const SizedBox(width: 12),
+            separatorBuilder: (_, index) => const SizedBox(width: 14),
             itemBuilder: (context, index) {
               final cat = categories[index];
               final isSelected = cat['name'] == selectedCategory;
@@ -154,73 +270,55 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
                   setState(() {
                     selectedCategory = cat['name'] as String;
                   });
+                  _searchWorkshops();
                 },
-                child: Column(
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.primary.withAlpha(20),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        cat['icon'] as IconData,
-                        color: isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
-                      ),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  child: GlassContainer(
+                    borderRadius: 24,
+                    blurSigma: 12,
+                    opacity: isSelected ? 0.18 : 0.05,
+                    backgroundColor: isSelected 
+                        ? Theme.of(context).colorScheme.primary 
+                        : (isDark ? Colors.white : Colors.black),
+                    borderColor: isSelected
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.6)
+                        : (isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08)),
+                    borderWidth: isSelected ? 1.5 : 0.8,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.white.withOpacity(0.2)
+                                : Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(
+                            cat['icon'] as IconData,
+                            color: isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          cat['name'] as String,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
+                            color: isSelected 
+                                ? (isDark ? Colors.white : Theme.of(context).colorScheme.primary) 
+                                : (isDark ? Colors.white70 : Colors.black54),
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      cat['name'] as String,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // 4. Top Brands Slider
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Top Brands Support',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
-            ),
-            TextButton(onPressed: () {}, child: const Text('See All', style: TextStyle(fontSize: 12))),
-          ],
-        ),
-        SizedBox(
-          height: 38,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: brands.length,
-            separatorBuilder: (_, index) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final brand = brands[index];
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.black.withAlpha(10)),
-                ),
-                child: Text(
-                  brand,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black54,
                   ),
                 ),
               );
@@ -229,27 +327,40 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
         ),
         const SizedBox(height: 24),
 
-        // 5. Workshops List
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              searchQuery.isNotEmpty || selectedCategory != 'All'
-                  ? 'Found (${workshops.length}) Workshops'
-                  : 'Top Recommended Workshops',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
+              'Top Recommended Workshops',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
             ),
+            if (isLoading)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
           ],
         ),
         const SizedBox(height: 16),
-        if (workshops.isEmpty)
+        
+        if (isLoading && workshops.isEmpty)
+          const Center(child: Padding(
+            padding: EdgeInsets.all(32.0),
+            child: CircularProgressIndicator(),
+          ))
+        else if (workshops.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 32),
             child: Column(
               children: [
                 Icon(Icons.search_off_outlined, size: 48, color: Colors.grey),
                 SizedBox(height: 8),
-                Text('No workshops match your filters.', style: TextStyle(color: Colors.grey)),
+                Text('No workshops found in this area.', style: TextStyle(color: Colors.grey)),
               ],
             ),
           )
@@ -412,15 +523,24 @@ class _WorkshopCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lowestPrice = workshop.services
-        .map((service) => service.price)
-        .reduce((value, element) => value < element ? value : element);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
+    final String statusLabel = workshop.isOpenNow == true ? 'Open Now' : (workshop.isOpenNow == false ? 'Closed' : 'Status: N/A');
+    final Color statusColor = workshop.isOpenNow == true ? Colors.green : Colors.red;
+
+    String typeLabel = 'Automotive';
+    if (workshop.types.contains('car_repair')) typeLabel = 'Workshop';
+    else if (workshop.types.contains('gas_station')) typeLabel = 'Fuel & Services';
+    else if (workshop.types.contains('car_wash')) typeLabel = 'Car Wash';
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.black.withAlpha(10)),
+        side: BorderSide(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withAlpha(10),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -435,27 +555,47 @@ class _WorkshopCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withAlpha(20),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'POPULAR',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                            color: Theme.of(context).colorScheme.primary,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withAlpha(20),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'POPULAR',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              typeLabel.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: isDark ? Colors.white70 : Colors.black54,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Text(
                         workshop.name,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: Colors.black87,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
                       ),
                     ],
@@ -490,7 +630,7 @@ class _WorkshopCard extends StatelessWidget {
                 const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
                 const SizedBox(width: 4),
                 Text(
-                  '${workshop.distance} away',
+                  workshop.distance ?? 'Nearby',
                   style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(width: 12),
@@ -505,15 +645,15 @@ class _WorkshopCard extends StatelessWidget {
             const SizedBox(height: 12),
             RichText(
               text: TextSpan(
-                style: const TextStyle(color: Colors.black87, fontSize: 13),
+                style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontSize: 13),
                 children: [
-                  const TextSpan(text: 'Services from ', style: TextStyle(color: Colors.grey)),
+                  const TextSpan(text: 'Status: ', style: TextStyle(color: Colors.grey)),
                   TextSpan(
-                    text: 'RM ${lowestPrice.toStringAsFixed(0)}',
+                    text: statusLabel,
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
-                      color: Theme.of(context).colorScheme.primary,
-                      fontSize: 14,
+                      color: statusColor,
+                      fontSize: 13,
                     ),
                   ),
                 ],
@@ -523,13 +663,14 @@ class _WorkshopCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _openDetails(context),
+                  child: OutlinedButton.icon(
+                    onPressed: _launchNavigation,
+                    icon: const Icon(Icons.directions, size: 18),
+                    label: const Text('Navigate', style: TextStyle(fontWeight: FontWeight.bold)),
                     style: OutlinedButton.styleFrom(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    child: const Text('Quote', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -537,10 +678,22 @@ class _WorkshopCard extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: () => _openDetails(context),
                     style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      minimumSize: const Size(0, 40),
                     ),
-                    child: const Text('Book Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(
+                      workshop.isGasStation ? 'View Details' : 'Book Now',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -558,5 +711,24 @@ class _WorkshopCard extends StatelessWidget {
         builder: (_) => WorkshopDetailScreen(workshop: workshop),
       ),
     );
+  }
+
+  Future<void> _launchNavigation() async {
+    if (workshop.location == null) return;
+    
+    final lat = workshop.location!.latitude;
+    final lng = workshop.location!.longitude;
+    final url = Uri.parse('google.navigation:q=$lat,$lng');
+    final webUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+    }
   }
 }
