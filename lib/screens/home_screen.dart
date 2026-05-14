@@ -11,7 +11,13 @@ import 'document_vault_screen.dart';
 import 'notifications_screen.dart';
 import 'refuel_log_screen.dart';
 import 'settings_screen.dart';
+import 'trip_planner_screen.dart';
+import 'journey_log_screen.dart';
 import 'vehicle_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/onboarding_guide.dart';
+import '../widgets/wallet_top_up_sheet.dart';
+import 'wallet_history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,6 +48,30 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     HomeScreen.activeTabNotifier.value = 0; // Reset index to home cockpit on startup
     HomeScreen.activeTabNotifier.addListener(_onTabChanged);
+    _checkFirstLaunchOnboarding();
+  }
+
+  Future<void> _checkFirstLaunchOnboarding() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeen = prefs.getBool('has_seen_onboarding_guide') ?? false;
+      if (!hasSeen) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              return OnboardingGuide(
+                onFinished: () async {
+                  Navigator.pop(context);
+                  await prefs.setBool('has_seen_onboarding_guide', true);
+                },
+              );
+            },
+          );
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -217,6 +247,16 @@ class _HomeCockpitBody extends StatelessWidget {
       HomeScreen.activeTabNotifier.value = 3; // Swaps to Refuels tab
     } else if (routeName == DocumentVaultScreen.routeName) {
       HomeScreen.activeTabNotifier.value = 4; // Swaps to Vault tab
+    } else if (routeName == TripPlannerScreen.routeName) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const TripPlannerScreen()),
+      );
+    } else if (routeName == JourneyLogScreen.routeName) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const JourneyLogScreen()),
+      );
     } else {
       await Navigator.pushNamed(context, routeName);
     }
@@ -233,54 +273,153 @@ class _HomeCockpitBody extends StatelessWidget {
           ListenableBuilder(
             listenable: ProfileService.instance,
             builder: (context, child) {
-              final profile = ProfileService.instance;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              try {
+                final profile = ProfileService.instance;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Hello, ${profile.displayName}! 👋',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.6,
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white
-                              : const Color(0xFF1F2937),
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Hello, ${profile.displayName}! 👋',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.6,
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : const Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Welcome to your vehicle center',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 13,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Welcome to your vehicle center',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 13,
-                          letterSpacing: 0.5, // Point 3: Extended Subheader spacing
+                      GestureDetector(
+                        onTap: () => _navigateTo(context, VehicleScreen.routeName),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.primary.withAlpha(80),
+                              width: 2.0,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            radius: 22,
+                            backgroundImage: NetworkImage(profile.photoUrl),
+                            backgroundColor: Colors.grey,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  GestureDetector(
-                    onTap: () => _navigateTo(context, VehicleScreen.routeName),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.primary.withAlpha(80),
-                          width: 2.0,
+                  const SizedBox(height: 20),
+                  // Digital Wallet Card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.primary.withBlue(150),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
                         ),
-                      ),
-                      child: CircleAvatar(
-                        radius: 22,
-                        backgroundImage: NetworkImage(profile.photoUrl),
-                        backgroundColor: Colors.grey,
-                      ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => Navigator.pushNamed(context, WalletHistoryScreen.routeName),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'DriveCare+ Wallet',
+                                    style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.history,
+                                    size: 14,
+                                    color: Colors.white.withOpacity(0.6),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'RM ${profile.walletBalance.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Theme.of(context).colorScheme.primary,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => const WalletTopUpSheet(),
+                            );
+                          },
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Top Up', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               );
+              } catch (e, stackTrace) {
+                return Card(
+                  color: Colors.red.withOpacity(0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text('Profile builder error: $e\n$stackTrace'),
+                  ),
+                );
+              }
             },
           ),
           const SizedBox(height: 28), // Point 5: Spacing breathability
@@ -348,6 +487,96 @@ class _HomeCockpitBody extends StatelessWidget {
                 ],
               );
             },
+          ),
+          const SizedBox(height: 16),
+          // Trip Planner Button
+          GlassContainer(
+            borderRadius: 24,
+            opacity: 0.15,
+            borderColor: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.map_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              title: Text(
+                'Trip Planner',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: isDark ? Colors.white : const Color(0xFF1F2937),
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 6.0),
+                child: Text(
+                  'Plan your routes and visualize dynamic directions.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              trailing: Icon(
+                Icons.chevron_right,
+                color: isDark ? Colors.white70 : const Color(0xFF1F2937),
+              ),
+              onTap: () => _navigateTo(context, TripPlannerScreen.routeName),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Journey Log Button
+          GlassContainer(
+            borderRadius: 24,
+            opacity: 0.15,
+            borderColor: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.explore_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              title: Text(
+                'Journey Logs',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: isDark ? Colors.white : const Color(0xFF1F2937),
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 6.0),
+                child: Text(
+                  'View history of recorded trips and statistics offline.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              trailing: Icon(
+                Icons.chevron_right,
+                color: isDark ? Colors.white70 : const Color(0xFF1F2937),
+              ),
+              onTap: () => _navigateTo(context, JourneyLogScreen.routeName),
+            ),
           ),
         ],
       ),

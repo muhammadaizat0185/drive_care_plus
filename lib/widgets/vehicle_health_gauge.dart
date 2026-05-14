@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'glass_container.dart';
 import '../services/vehicle_insights.dart';
-import '../screens/booking_screen.dart';
+import '../screens/home_screen.dart';
 
 class VehicleHealthGauge extends StatelessWidget {
   const VehicleHealthGauge({super.key});
@@ -160,7 +160,7 @@ class VehicleHealthGauge extends StatelessWidget {
             isCritical: isCritical,
             primaryColor: primaryColor,
             onTap: () {
-              Navigator.pushNamed(context, BookingScreen.routeName);
+              HomeScreen.activeTabNotifier.value = 1;
             },
           ),
         ],

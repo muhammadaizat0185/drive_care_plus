@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'home_screen.dart';
 import 'register_screen.dart';
@@ -41,6 +42,10 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_offline_logged_in', true);
+      } catch (_) {}
       if (mounted) {
         Navigator.pushReplacementNamed(context, HomeScreen.routeName);
       }
@@ -49,6 +54,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       // Robust Fallback: If Firebase is not fully configured online or offline
       debugPrint('Firebase Login Error fallback: $e');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_offline_logged_in', true);
+      } catch (_) {}
       _showSnackbar('Firebase Offline Mode: Logging in as dummy user.');
       await Future.delayed(const Duration(milliseconds: 600));
       if (mounted) {

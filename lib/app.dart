@@ -14,6 +14,7 @@ import 'screens/splash_screen.dart';
 import 'screens/trip_tracking_screen.dart';
 import 'screens/vehicle_screen.dart';
 import 'screens/workshop_map_screen.dart';
+import 'screens/wallet_history_screen.dart';
 import 'services/theme_service.dart';
 
 class DriveCarePlusApp extends StatelessWidget {
@@ -46,6 +47,7 @@ class DriveCarePlusApp extends StatelessWidget {
             DocumentVaultScreen.routeName: (_) => const DocumentVaultScreen(),
             NotificationsScreen.routeName: (_) => const NotificationsScreen(),
             SettingsScreen.routeName: (_) => const SettingsScreen(),
+            WalletHistoryScreen.routeName: (_) => const WalletHistoryScreen(),
           },
         );
       },

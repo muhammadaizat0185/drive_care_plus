@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,10 +12,15 @@ class ProfileService extends ChangeNotifier {
   String _phone = '+60 12-345 6789';
   String _bio = 'Daily Commuter 🚗';
 
+  double _walletBalance = 0.0;
+  List<Map<String, dynamic>> _transactions = [];
+
   String get displayName => _displayName;
   String get photoUrl => _photoUrl;
   String get phone => _phone;
   String get bio => _bio;
+  double get walletBalance => _walletBalance;
+  List<Map<String, dynamic>> get transactions => _transactions;
 
   static const List<String> presetAvatars = [
     'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80', // Default Casual
@@ -38,10 +44,37 @@ class ProfileService extends ChangeNotifier {
       _photoUrl = prefs.getString('user_photo_url') ?? _photoUrl;
       _phone = prefs.getString('user_phone') ?? _phone;
       _bio = prefs.getString('user_bio') ?? _bio;
+      _walletBalance = prefs.getDouble('wallet_balance') ?? 0.0;
+      
+      final txnsJsonList = prefs.getStringList('wallet_transactions');
+      if (txnsJsonList != null) {
+        _transactions = txnsJsonList.map((str) => Map<String, dynamic>.from(jsonDecode(str))).toList();
+      }
     } catch (e) {
       debugPrint('Error loading profile: $e');
     }
     notifyListeners();
+  }
+
+  Future<void> addWalletTransaction(double amount, String type, String description) async {
+    _walletBalance += amount;
+    final transaction = {
+      'amount': amount,
+      'type': type, // 'top_up' or 'deduction'
+      'description': description,
+      'date': DateTime.now().toIso8601String(),
+    };
+    _transactions.insert(0, transaction);
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('wallet_balance', _walletBalance);
+      final jsonList = _transactions.map((t) => jsonEncode(t)).toList();
+      await prefs.setStringList('wallet_transactions', jsonList);
+    } catch (e) {
+      debugPrint('SharedPreferences save wallet error: $e');
+    }
   }
 
   Future<void> updateProfile({
@@ -76,6 +109,24 @@ class ProfileService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Firebase profile sync error: $e');
+    }
+  }
+
+  Future<void> clearProfile() async {
+    _displayName = 'Driver';
+    _photoUrl = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
+    _phone = '+60 12-345 6789';
+    _bio = 'Daily Commuter 🚗';
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_display_name');
+      await prefs.remove('user_photo_url');
+      await prefs.remove('user_phone');
+      await prefs.remove('user_bio');
+    } catch (e) {
+      debugPrint('SharedPreferences clear error: $e');
     }
   }
 }
