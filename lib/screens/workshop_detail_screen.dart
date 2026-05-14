@@ -31,9 +31,44 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     'Oil Change', 
     'Tire Replacement', 
     'Brake Repair', 
-    'Car Wash', 
     'Engine Tuning'
   ];
+
+  bool _isMajorService = false;
+  bool _showBookingSetup = false;
+  final Set<String> _selectedSpecificServices = {};
+
+  final Map<String, List<String>> _repairServices = {
+    'Basic Maintenance': [
+      'Engine Oil & Oil Filter Change',
+      'Air Filter Replacement',
+      'Cabin Air Filter Replacement',
+      'Spark Plug Replacement',
+      'Battery Check / Replacement'
+    ],
+    'Fluid Services': [
+      'Coolant / Radiator Fluid Service',
+      'Brake Fluid Replacement',
+      'Transmission Fluid Service',
+      'Power Steering Fluid Check',
+      'Windshield Washer Fluid Refill'
+    ],
+    'Brake & Tire Services': [
+      'Brake Pad Replacement',
+      'Brake Disc Skimming / Replacement',
+      'Tire Rotation',
+      'Wheel Alignment',
+      'Wheel Balancing',
+      'Tire Replacement'
+    ],
+    'Inspection & Repair': [
+      'Suspension Check',
+      'Engine Diagnostic Scan',
+      'Air-Conditioning Service',
+      'Timing Belt / Timing Chain Service',
+      'Fuel System Cleaning'
+    ]
+  };
 
   @override
   void initState() {
@@ -157,7 +192,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               else ...[
                 _buildInfoSection(isDark, primaryColor),
                 const SizedBox(height: 20),
-                if (!_currentWorkshop.isGasStation) ...[
+                if (!_currentWorkshop.isGasStation && !_currentWorkshop.isCarWash) ...[
                   _buildBookingSection(isDark, primaryColor),
                   const SizedBox(height: 20),
                 ],
@@ -167,7 +202,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: _currentWorkshop.isGasStation 
+      bottomNavigationBar: (_currentWorkshop.isGasStation || _currentWorkshop.isCarWash || !_showBookingSetup)
           ? null 
           : _buildBottomActionBar(primaryColor, isDark),
     );
@@ -314,7 +349,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
-            'BOOK APPOINTMENT',
+            'GET SERVICE',
             style: TextStyle(
               fontSize: 12, 
               fontWeight: FontWeight.w900, 
@@ -323,80 +358,24 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             ),
           ),
         ),
-        Card(
-          elevation: 0,
-          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: primaryColor.withOpacity(0.3)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                DropdownButtonFormField<String>(
-                  value: _selectedServiceType,
-                  dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                  decoration: InputDecoration(
-                    labelText: 'Service Type',
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                  items: _serviceTypes.map((type) => DropdownMenuItem(
-                    value: type,
-                    child: Text(type),
-                  )).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedServiceType = val);
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickDate,
-                        icon: const Icon(Icons.calendar_today, size: 18),
-                        label: Text(_selectedDate == null ? 'Select Date' : '${_selectedDate!.day}/${_selectedDate!.month}'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickTime,
-                        icon: const Icon(Icons.access_time, size: 18),
-                        label: Text(_selectedTime == null ? 'Select Time' : _selectedTime!.format(context)),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: _confirmBooking,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shadowColor: primaryColor.withOpacity(0.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: const Text('Schedule Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                ),
-              ],
+        SizedBox(
+          width: double.infinity,
+          height: 60,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              setState(() => _showBookingSetup = true);
+            },
+            icon: const Icon(Icons.calendar_month, size: 20),
+            label: const Text(
+              'Book Appointment', 
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shadowColor: primaryColor.withOpacity(0.4),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             ),
           ),
         ),
@@ -511,11 +490,13 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Widget _buildBottomActionBar(Color primaryColor, bool isDark) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
       padding: EdgeInsets.only(
         left: 20, 
         right: 20, 
-        top: 16, 
+        top: 20, 
         bottom: MediaQuery.of(context).padding.bottom + 16
       ),
       decoration: BoxDecoration(
@@ -529,44 +510,232 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         ],
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            flex: 3,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          if (_showBookingSetup) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'ESTIMATED TOTAL', 
-                  style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w900, letterSpacing: 1),
+                Text(
+                  'BOOKING DETAILS',
+                  style: TextStyle(
+                    fontSize: 11, 
+                    fontWeight: FontWeight.w900, 
+                    color: primaryColor, 
+                    letterSpacing: 1,
+                  ),
                 ),
-                const SizedBox(height: 4),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'RM 150 - 500', 
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: primaryColor),
+                IconButton(
+                  onPressed: () => setState(() => _showBookingSetup = false),
+                  icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isMajorService ? Icons.stars_rounded : Icons.build_circle_outlined,
+                    color: _isMajorService ? Colors.amber : primaryColor,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isMajorService ? 'Major Service' : 'Minor Service',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        Text(
+                          _isMajorService 
+                              ? 'Includes comprehensive checkup' 
+                              : 'Includes basic maintenance',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: _isMajorService,
+                    activeColor: Colors.amber,
+                    onChanged: (val) => setState(() => _isMajorService = val),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_currentWorkshop.isRepairShop) ...[
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Select Specific Services',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                height: 180,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.03) : Colors.grey.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  children: _repairServices.entries.map((category) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                          child: Text(
+                            category.key.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10, 
+                              fontWeight: FontWeight.w900, 
+                              color: primaryColor.withOpacity(0.7),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        ...category.value.map((service) {
+                          final isSelected = _selectedSpecificServices.contains(service);
+                          return CheckboxListTile(
+                            value: isSelected,
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            title: Text(service, style: const TextStyle(fontSize: 13)),
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _selectedSpecificServices.add(service);
+                                } else {
+                                  _selectedSpecificServices.remove(service);
+                                }
+                              });
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                            activeColor: primaryColor,
+                          );
+                        }),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+              if (_selectedSpecificServices.length > 5)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Pro Tip: Major Service Recommended',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amber),
+                              ),
+                              Text(
+                                'You selected ${_selectedSpecificServices.length} items. A Major Service might be more cost-effective.',
+                                style: TextStyle(fontSize: 11, color: isDark ? Colors.white70 : Colors.black87),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.calendar_today, size: 16),
+                    label: Text(_selectedDate == null ? 'Date' : '${_selectedDate!.day}/${_selectedDate!.month}'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickTime,
+                    icon: const Icon(Icons.access_time, size: 16),
+                    label: Text(_selectedTime == null ? 'Time' : _selectedTime!.format(context)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 2,
-            child: ElevatedButton(
-              onPressed: _confirmBooking,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                elevation: 4,
-                shadowColor: primaryColor.withOpacity(0.4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 12),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => setState(() => _showBookingSetup = false),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    side: BorderSide(color: Colors.grey.shade400),
+                  ),
+                  child: const Text(
+                    'Cancel', 
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey),
+                  ),
+                ),
               ),
-              child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _confirmBooking,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 4,
+                    shadowColor: primaryColor.withOpacity(0.4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  ),
+                  child: const Text(
+                    'Schedule', 
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -608,6 +777,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       'place_id': _currentWorkshop.id,
       'workshopName': _currentWorkshop.name,
       'serviceName': _selectedServiceType,
+      'specificServices': _selectedSpecificServices.toList(),
       'date': _selectedDate!.toIso8601String(),
       'time': '${_selectedTime!.hour}:${_selectedTime!.minute}',
       'totalCost': 150.0, // Dummy fixed cost

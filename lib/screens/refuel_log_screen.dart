@@ -1,6 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../services/google_maps_service.dart';
+import '../models/workshop.dart';
+import 'workshop_detail_screen.dart';
 
 import '../services/vehicle_insights.dart';
 import '../widgets/eco_insights_card.dart';
@@ -177,10 +184,31 @@ class _RefuelLogScreenState extends State<RefuelLogScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: _calculate,
-                      icon: const Icon(Icons.calculate_outlined),
-                      label: const Text('Calculate Efficiency'),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _calculate,
+                            icon: const Icon(Icons.calculate_outlined),
+                            label: const Text('Calculate Efficiency'),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size(0, 48),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _findNearbyGasStations,
+                            icon: const Icon(Icons.map_outlined),
+                            label: const Text('Find Nearby Pump'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 48),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -392,6 +420,15 @@ class _RefuelLogScreenState extends State<RefuelLogScreen> {
     }
   }
 
+  Future<void> _findNearbyGasStations() async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _NearbyGasStationsSheet(),
+    );
+  }
+
   Future<void> _saveRefuelLogCloud(
     String uid,
     String dateStr,
@@ -419,6 +456,158 @@ class _RefuelLogScreenState extends State<RefuelLogScreen> {
     } catch (e) {
       debugPrint('Firestore refuel log save error: $e');
     }
+  }
+}
+
+class _NearbyGasStationsSheet extends StatefulWidget {
+  @override
+  State<_NearbyGasStationsSheet> createState() => _NearbyGasStationsSheetState();
+}
+
+class _NearbyGasStationsSheetState extends State<_NearbyGasStationsSheet> {
+  List<Workshop> _gasStations = [];
+  bool _isLoading = true;
+  double _radius = 5.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _search();
+  }
+
+  Future<void> _search() async {
+    setState(() => _isLoading = true);
+    try {
+      final pos = await Geolocator.getCurrentPosition();
+      final results = await GoogleMapsService.searchNearbyWorkshops(
+        LatLng(pos.latitude, pos.longitude),
+        _radius,
+        includedTypes: ['gas_station'],
+      );
+
+      setState(() {
+        _gasStations = results.map((json) {
+          final w = Workshop.fromGooglePlace(json);
+          final dist = Geolocator.distanceBetween(
+            pos.latitude, pos.longitude,
+            w.location!.latitude, w.location!.longitude,
+          );
+          return Workshop(
+            id: w.id,
+            name: w.name,
+            address: w.address,
+            rating: w.rating,
+            reviewCount: w.reviewCount,
+            location: w.location,
+            isGooglePlace: true,
+            distance: '${(dist / 1000).toStringAsFixed(1)} km',
+            types: w.types,
+            isOpenNow: w.isOpenNow,
+          );
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Gas Station Search Error: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Nearby Fuel Pumps',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  '${_radius.toInt()} km',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor),
+                ),
+              ],
+            ),
+          ),
+          Slider(
+            value: _radius,
+            min: 1.0,
+            max: 20.0,
+            divisions: 19,
+            onChanged: (val) => setState(() => _radius = val),
+            onChangeEnd: (_) => _search(),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _gasStations.isEmpty
+                    ? const Center(child: Text('No fuel pumps found nearby.'))
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: _gasStations.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final station = _gasStations[index];
+                          return Card(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              leading: CircleAvatar(
+                                backgroundColor: primaryColor.withOpacity(0.1),
+                                child: Icon(Icons.local_gas_station, color: primaryColor),
+                              ),
+                              title: Text(station.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('${station.distance} • ${station.address}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.directions, color: Colors.blue),
+                                onPressed: () async {
+                                  final lat = station.location!.latitude;
+                                  final lng = station.location!.longitude;
+                                  final url = Uri.parse('google.navigation:q=$lat,$lng');
+                                  if (await canLaunchUrl(url)) {
+                                    await launchUrl(url);
+                                  }
+                                },
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => WorkshopDetailScreen(workshop: station),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

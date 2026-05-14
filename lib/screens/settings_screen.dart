@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/theme_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/cloud_sync_quota_card.dart';
+import '../widgets/api_monitoring_card.dart';
 import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -429,6 +430,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               const CloudSyncQuotaCard(),
+              const SizedBox(height: 16),
+              const ApiMonitoringCard(),
               const SizedBox(height: 24),
 
               // Section: Info

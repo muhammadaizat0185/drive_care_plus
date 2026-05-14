@@ -12,9 +12,16 @@ class VehicleHealthGauge extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final insights = VehicleInsights.instance;
+    
+    // Get the most urgent health percentage from all watchlist items
+    final watchlist = insights.watchlistItems;
+    double rawPercentage = 1.0;
+    if (watchlist.isNotEmpty) {
+      final minHealth = watchlist.map((e) => e.healthPercentage).reduce((a, b) => a < b ? a : b);
+      rawPercentage = (minHealth / 100.0).clamp(0.0, 1.0);
+    }
+    
     final kmLeft = insights.kmUntilServiceInstance;
-    final totalInterval = 10000.0; // Standard service interval 10,000 km
-    final rawPercentage = (kmLeft / totalInterval).clamp(0.0, 1.0);
     final displayPercentage = (rawPercentage * 100).toInt();
 
     final Color primaryColor = Theme.of(context).colorScheme.primary;
