@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/onboarding_guide.dart';
 import '../widgets/wallet_top_up_sheet.dart';
 import 'wallet_history_screen.dart';
+import '../services/activity_recognition_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -49,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
     HomeScreen.activeTabNotifier.value = 0; // Reset index to home cockpit on startup
     HomeScreen.activeTabNotifier.addListener(_onTabChanged);
     _checkFirstLaunchOnboarding();
+    ActivityRecognitionService.instance.startListening();
   }
 
   Future<void> _checkFirstLaunchOnboarding() async {
