@@ -433,6 +433,8 @@ class VehicleInsights extends ChangeNotifier {
             'recommendedTyrePressurePsi': 36.0,
             'engineOilCapacityLiters': 3.0,
             'currentMileageKm': 38200.0,
+            'maintenanceData': <String, Map<String, dynamic>>{},
+            'mileageHistory': <Map<String, dynamic>>[],
           }
         ];
         await _saveVehiclesToPrefs();
@@ -456,6 +458,21 @@ class VehicleInsights extends ChangeNotifier {
         _currentMileageKm = (v['currentMileageKm'] as num?)?.toDouble() ?? 38200.0;
         _carType = v['carType'] ?? 'sedan';
         _carColor = v['carColor'] ?? '#3B82F6';
+        
+        // Fix: Load maintenance and history from the vehicle object
+        if (v['maintenanceData'] != null) {
+          _maintenanceData = (v['maintenanceData'] as Map).map(
+            (key, value) => MapEntry(key.toString(), Map<String, dynamic>.from(value as Map))
+          );
+        } else {
+          _maintenanceData = {};
+        }
+        
+        if (v['mileageHistory'] != null) {
+          _mileageHistory = List<Map<String, dynamic>>.from(v['mileageHistory']);
+        } else {
+          _mileageHistory = [];
+        }
       }
     } catch (e) {
       debugPrint('SharedPreferences load error: $e');

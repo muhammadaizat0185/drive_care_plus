@@ -19,9 +19,17 @@ class JourneyDatabase {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute("ALTER TABLE journeys ADD COLUMN status TEXT DEFAULT 'planned'");
+      await db.execute("ALTER TABLE journeys ADD COLUMN vehicle_type TEXT");
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -32,7 +40,9 @@ CREATE TABLE journeys (
   end_time TEXT,
   distance_km REAL,
   start_address TEXT,
-  destination_address TEXT
+  destination_address TEXT,
+  status TEXT DEFAULT 'planned',
+  vehicle_type TEXT
 )
 ''');
 
@@ -49,10 +59,11 @@ CREATE TABLE journey_points (
   }
 
   // Insert Journey
-  Future<int> startJourney() async {
+  Future<int> startJourney({String status = 'planned'}) async {
     final db = await instance.database;
     final id = await db.insert('journeys', {
       'start_time': DateTime.now().toIso8601String(),
+      'status': status,
     });
     return id;
   }
@@ -77,6 +88,32 @@ CREATE TABLE journey_points (
         'end_time': DateTime.now().toIso8601String(),
         'distance_km': totalDistanceKm,
         'start_address': startAddr,
+        'destination_address': destAddr,
+      },
+      where: 'id = ?',
+      whereArgs: [journeyId],
+    );
+  }
+
+  Future<void> updateJourneyStatus(int journeyId, String status, String vehicleType) async {
+    final db = await instance.database;
+    await db.update(
+      'journeys',
+      {
+        'status': status,
+        'vehicle_type': vehicleType,
+      },
+      where: 'id = ?',
+      whereArgs: [journeyId],
+    );
+  }
+
+  Future<void> updateJourneyDestination(int journeyId, String? destAddr) async {
+    if (destAddr == null) return;
+    final db = await instance.database;
+    await db.update(
+      'journeys',
+      {
         'destination_address': destAddr,
       },
       where: 'id = ?',
