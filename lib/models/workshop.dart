@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class Workshop {
@@ -38,6 +39,8 @@ class Workshop {
   final bool? isOpenNow;
 
   bool get isGasStation => types.contains('gas_station');
+  bool get isCarWash => types.contains('car_wash');
+  bool get isRepairShop => types.contains('car_repair') || types.contains('car_repairer');
 
   factory Workshop.fromGooglePlace(Map<String, dynamic> json) {
     return Workshop(
@@ -116,13 +119,22 @@ class WorkshopReview {
   }
 
   factory WorkshopReview.fromMap(Map<String, dynamic> map) {
+    DateTime? parsedDate;
+    if (map['timestamp'] != null) {
+      if (map['timestamp'] is Timestamp) {
+        parsedDate = (map['timestamp'] as Timestamp).toDate();
+      } else if (map['timestamp'] is String) {
+        parsedDate = DateTime.tryParse(map['timestamp']);
+      }
+    }
+
     return WorkshopReview(
       author: map['author'] ?? 'Anonymous',
       rating: (map['rating'] ?? 0.0).toDouble(),
       comment: map['comment'] ?? '',
       priceTransparency: (map['priceTransparency'] ?? 0.0).toDouble(),
       serviceQuality: (map['serviceQuality'] ?? 0.0).toDouble(),
-      timestamp: map['timestamp'] != null ? DateTime.parse(map['timestamp']) : null,
+      timestamp: parsedDate,
     );
   }
 }

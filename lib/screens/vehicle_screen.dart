@@ -1,9 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+  import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/car_database.dart';
 import '../services/vehicle_insights.dart';
+import '../widgets/car_health_overlay.dart';
+import 'vehicle_customizer_screen.dart';
 
 class VehicleScreen extends StatefulWidget {
   const VehicleScreen({super.key});
@@ -14,13 +16,111 @@ class VehicleScreen extends StatefulWidget {
   State<VehicleScreen> createState() => _VehicleScreenState();
 }
 
-class _VehicleScreenState extends State<VehicleScreen> {
+ class _VehicleScreenState extends State<VehicleScreen> {
   final _carouselScrollController = ScrollController();
+  final Set<String> _selectedMaintenanceItems = {};
 
   @override
   void dispose() {
     _carouselScrollController.dispose();
     super.dispose();
+  }
+
+  void _showMileageUpdateDialog(VehicleInsights insights) {
+    final controller = TextEditingController(text: insights.currentMileageKm.toStringAsFixed(0));
+    String? errorText;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Update Odometer', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Enter your current vehicle mileage to keep your health tracking accurate.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                onChanged: (_) {
+                  if (errorText != null) setDialogState(() => errorText = null);
+                },
+                decoration: InputDecoration(
+                  labelText: 'Current Mileage (km)',
+                  errorText: errorText,
+                  filled: true,
+                  fillColor: Colors.grey.withOpacity(0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final mileage = double.tryParse(controller.text) ?? 0.0;
+                if (mileage >= insights.currentMileageKm) {
+                  insights.updateCurrentMileage(mileage);
+                  Navigator.pop(context);
+                  HapticFeedback.mediumImpact();
+                } else {
+                  setDialogState(() {
+                    errorText = 'Mileage cannot be lower than ${insights.currentMileageKm.toStringAsFixed(0)} km';
+                  });
+                  HapticFeedback.vibrate();
+                }
+              },
+              child: const Text('Update'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _logBatchMaintenance(VehicleInsights insights) {
+    final mileageController = TextEditingController(text: insights.currentMileageKm.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Log Maintenance', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Logging ${_selectedMaintenanceItems.length} items. At what mileage was this performed?', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: mileageController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Service Mileage (km)',
+                filled: true,
+                fillColor: Colors.grey.withOpacity(0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final mileage = double.tryParse(mileageController.text) ?? insights.currentMileageKm;
+              insights.logMaintenance(_selectedMaintenanceItems.toList(), mileage);
+              setState(() => _selectedMaintenanceItems.clear());
+              Navigator.pop(context);
+              HapticFeedback.heavyImpact();
+            },
+            child: const Text('Confirm Log'),
+          ),
+        ],
+      ),
+    );
   }
 
   double _getEngineHealth(VehicleInsights insights) {
@@ -82,6 +182,10 @@ class _VehicleScreenState extends State<VehicleScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               children: [
+                // Quick Mileage Update Card
+                _buildMileageCard(context, insights),
+                const SizedBox(height: 16),
+
                 // Horizontal Vehicles Carousel Section
                 _buildVehiclesCarousel(context, insights),
                 const SizedBox(height: 16),
@@ -114,10 +218,25 @@ class _VehicleScreenState extends State<VehicleScreen> {
                                     letterSpacing: -0.5,
                                   ),
                             ),
-                            IconButton.filledTonal(
-                              onPressed: _showEditVehicleDialog,
-                              icon: const Icon(Icons.edit_note, size: 20),
-                              tooltip: 'Edit Specifications',
+                            Row(
+                              children: [
+                                IconButton.filledTonal(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const VehicleCustomizerScreen()),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.palette_outlined, size: 20),
+                                  tooltip: 'Customize Look',
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.filledTonal(
+                                  onPressed: _showEditVehicleDialog,
+                                  icon: const Icon(Icons.edit_note, size: 20),
+                                  tooltip: 'Edit Specifications',
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -152,7 +271,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
                 ),
                 const SizedBox(height: 16),
   
-                // Original Predictive Maintenance List (Watchlist)
+                // Predictive Maintenance List (Watchlist)
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -166,42 +285,63 @@ class _VehicleScreenState extends State<VehicleScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Vehicle Health Watchlist',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.5,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Service Watchlist',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.5,
+                                  ),
+                            ),
+                            if (_selectedMaintenanceItems.isNotEmpty)
+                              TextButton.icon(
+                                onPressed: () => _logBatchMaintenance(insights),
+                                icon: const Icon(Icons.fact_check, size: 18),
+                                label: Text('Log (${_selectedMaintenanceItems.length})'),
+                                style: TextButton.styleFrom(foregroundColor: primaryColor),
                               ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Predictive maintenance alerts based on your current mileage.',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         ...insights.watchlistItems.map((item) {
+                          final isSelected = _selectedMaintenanceItems.contains(item.name);
                           Color statusColor;
-                          IconData statusIcon;
                           if (item.status == 'Red') {
                             statusColor = Colors.red;
-                            statusIcon = Icons.warning_amber_rounded;
                           } else if (item.status == 'Yellow') {
                             statusColor = Colors.orange;
-                            statusIcon = Icons.info_outline_rounded;
                           } else {
                             statusColor = Colors.green;
-                            statusIcon = Icons.check_circle_outline_rounded;
                           }
   
-                          return ListTile(
+                          return CheckboxListTile(
+                            value: isSelected,
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _selectedMaintenanceItems.add(item.name);
+                                } else {
+                                  _selectedMaintenanceItems.remove(item.name);
+                                }
+                              });
+                            },
                             contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              backgroundColor: statusColor.withOpacity(0.12),
-                              child: Icon(statusIcon, color: statusColor, size: 20),
+                            activeColor: primaryColor,
+                            title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Due in ${item.remainingKm.toStringAsFixed(0)} km', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text('Predicted Due: ${item.predictedDateStr}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                              ],
                             ),
-                            title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('Due in ${item.remainingKm.toStringAsFixed(0)} km\n(at ${item.nextChangeMileage.toStringAsFixed(0)} km)'),
-                            isThreeLine: true,
+                            secondary: Container(
+                              width: 4,
+                              height: 40,
+                              decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(2)),
+                            ),
                           );
                         }),
                       ],
@@ -245,7 +385,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 100,
+          height: 110,
           child: Scrollbar(
             controller: _carouselScrollController,
             thumbVisibility: false,
@@ -259,7 +399,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
                   return GestureDetector(
                     onTap: _showRegisterVehicleDialog,
                     child: Container(
-                      width: 150,
+                      width: 120,
                       margin: const EdgeInsets.only(right: 12),
                       decoration: BoxDecoration(
                         color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey.withOpacity(0.05),
@@ -273,11 +413,11 @@ class _VehicleScreenState extends State<VehicleScreen> {
                       child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_circle_outline, color: Colors.grey, size: 28),
-                          SizedBox(height: 6),
+                          Icon(Icons.add_circle_outline, color: Colors.grey, size: 24),
+                          SizedBox(height: 4),
                           Text(
-                            'Add Vehicle',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 13),
+                            'Add',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12),
                           ),
                         ],
                       ),
@@ -288,12 +428,12 @@ class _VehicleScreenState extends State<VehicleScreen> {
                 final vehicle = insights.vehicles[index];
                 final isActive = index == insights.activeVehicleIndex;
 
-                return GestureDetector(
+                  return GestureDetector(
                   onTap: () => insights.setActiveVehicle(index),
                   child: Container(
-                    width: 200,
+                    width: 240,
                     margin: const EdgeInsets.only(right: 12),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: isActive
                           ? primaryColor.withOpacity(0.1)
@@ -306,68 +446,71 @@ class _VehicleScreenState extends State<VehicleScreen> {
                       boxShadow: isActive
                           ? [
                               BoxShadow(
-                                color: primaryColor.withOpacity(0.2),
+                                color: primaryColor.withOpacity(0.1),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               )
                             ]
                           : null,
                     ),
-                    child: Stack(
+                    child: Row(
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.directions_car,
-                                  color: isActive ? primaryColor : Colors.grey,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    vehicle['model'] ?? 'Perodua Axia',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 14,
-                                      color: isActive ? primaryColor : (isDark ? Colors.white : Colors.black87),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              vehicle['plate'] ?? '',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: isActive ? primaryColor.withOpacity(0.8) : Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${((vehicle['currentMileageKm'] ?? 0) as num).toStringAsFixed(0)} km',
-                              style: const TextStyle(fontSize: 10, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                        if (insights.vehicles.length > 1)
-                          Positioned(
-                            top: -4,
-                            right: -4,
-                            child: IconButton(
-                              icon: const Icon(Icons.remove_circle, color: Colors.red, size: 16),
-                              onPressed: () {
-                                _confirmDeleteVehicle(context, insights, index);
-                              },
+                        // Left: Car Image (Front View)
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.05),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: SvgPicture.asset(
+                              'assets/images/cars/Car Vector/SVG/${vehicle['carType'] ?? 'sedan'}_front.svg',
+                              height: 50,
                             ),
                           ),
+                        ),
+                        const SizedBox(width: 14),
+                        // Right: Info Stack
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                vehicle['model'] ?? 'Unknown',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                  color: isActive ? primaryColor : (isDark ? Colors.white : Colors.black87),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                vehicle['plate'] ?? '---',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: (isDark ? Colors.white70 : Colors.black54),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.speed, size: 12, color: primaryColor),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${((vehicle['currentMileageKm'] ?? 0) as num).toStringAsFixed(0)} km',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -414,9 +557,19 @@ class _VehicleScreenState extends State<VehicleScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    final engineVal = _getEngineHealth(insights);
-    final brakesVal = _getBrakesHealth(insights);
-    final tiresVal = _getTiresHealth(insights);
+    final watchlist = insights.watchlistItems;
+    
+    double getHealth(String pattern) {
+      try {
+        return (watchlist.firstWhere((e) => e.name.toLowerCase().contains(pattern)).healthPercentage / 100).clamp(0.0, 1.0);
+      } catch (_) {
+        return 1.0; // Default to healthy if item not found
+      }
+    }
+
+    final engineVal = getHealth('oil');
+    final brakesVal = getHealth('brake');
+    final tiresVal = getHealth('tyre');
 
     return Card(
       elevation: 0,
@@ -431,26 +584,99 @@ class _VehicleScreenState extends State<VehicleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Real-Time Vehicle Component Health',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Diagnostic Health Profile',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: const Text('LIVE', style: TextStyle(color: Colors.green, fontSize: 8, fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
+            // "Liquid Glass" Car Health Overlay
+            Center(
+              child: CarHealthOverlay(
+                carType: insights.carType,
+                watchlist: watchlist,
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Squircle Liquid Gauges
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _circularGauge('Engine Oil', engineVal, const Color(0xFF10B981), primaryColor),
-                _circularGauge('Brakes', brakesVal, Colors.orange, primaryColor),
-                _circularGauge('Tires', tiresVal, Colors.blue, primaryColor),
+                LiquidSquircleGauge(value: engineVal, color: const Color(0xFF10B981), label: 'Engine Oil'),
+                LiquidSquircleGauge(value: brakesVal, color: Colors.orange, label: 'Brakes'),
+                LiquidSquircleGauge(value: tiresVal, color: Colors.blue, label: 'Tires'),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildMileageCard(BuildContext context, VehicleInsights insights) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return Card(
+      elevation: 0,
+      color: primaryColor.withOpacity(0.05),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: primaryColor.withOpacity(0.1))),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(Icons.speed, color: primaryColor),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Current Odometer', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  Text('${insights.currentMileageKm.toStringAsFixed(0)} KM', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _showMileageUpdateDialog(insights),
+              icon: const Icon(Icons.edit, size: 12),
+              label: const Text('Update', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                elevation: 0,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _parseColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceAll('#', '0xFF')));
+    } catch (_) {
+      return const Color(0xFF3B82F6);
+    }
   }
 
   Widget _circularGauge(String label, double value, Color activeColor, Color primaryColor) {

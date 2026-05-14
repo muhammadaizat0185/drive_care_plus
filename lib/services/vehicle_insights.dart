@@ -22,6 +22,12 @@ class VehicleInsights extends ChangeNotifier {
   final double _averageDailyDistanceKm = 50;
   double _recentTripDistanceKm = 24.6;
   double _recentTripFuelCostRm = 5.40;
+  String _carType = 'sedan';
+  String _carColor = '#3B82F6'; // Default Blue
+
+  // Maintenance & History
+  Map<String, Map<String, dynamic>> _maintenanceData = {};
+  List<Map<String, dynamic>> _mileageHistory = [];
 
   // Bookings, documents and multiple vehicles lists
   List<Map<String, dynamic>> _bookings = [];
@@ -43,6 +49,10 @@ class VehicleInsights extends ChangeNotifier {
   double get averageDailyDistanceKm => _averageDailyDistanceKm;
   double get recentTripDistanceKm => _recentTripDistanceKm;
   double get recentTripFuelCostRm => _recentTripFuelCostRm;
+  String get carType => _carType;
+  String get carColor => _carColor;
+  Map<String, Map<String, dynamic>> get maintenanceData => _maintenanceData;
+  List<Map<String, dynamic>> get mileageHistory => _mileageHistory;
 
   List<Map<String, dynamic>> get bookings => _bookings;
   List<Map<String, dynamic>> get documents => _documents;
@@ -53,12 +63,49 @@ class VehicleInsights extends ChangeNotifier {
   List<Map<String, dynamic>> get activeBookings => _bookings;
 
   List<MaintenanceItem> get watchlistItems {
+    final now = DateTime.now();
     return [
-      MaintenanceItem(name: 'Engine Oil', currentMileage: _currentMileageKm, interval: 10000),
-      MaintenanceItem(name: 'Brake Pads', currentMileage: _currentMileageKm, interval: 40000),
-      MaintenanceItem(name: 'Tyres', currentMileage: _currentMileageKm, interval: 50000),
-      MaintenanceItem(name: 'Battery', currentMileage: _currentMileageKm, interval: 60000),
+      _createItem('Engine Oil', 10000),
+      _createItem('Brake Pads', 40000),
+      _createItem('Tyres', 50000),
+      _createItem('Battery', 60000),
     ]..sort((a, b) => a.remainingKm.compareTo(b.remainingKm));
+  }
+
+  MaintenanceItem _createItem(String name, double interval) {
+    // If no data exists, we use a fixed starting point (e.g., 0 or a large offset from current)
+    // to ensure health changes as current mileage increases.
+    final data = _maintenanceData[name] ?? {
+      'mileage': 0.0, // Assume new/fresh if never logged
+      'date': DateTime.now().subtract(const Duration(days: 365)).toIso8601String(),
+    };
+    
+    return MaintenanceItem(
+      name: name,
+      currentMileage: _currentMileageKm,
+      lastServiceMileage: (data['mileage'] as num).toDouble(),
+      lastServiceDate: DateTime.parse(data['date'] as String),
+      interval: interval,
+    );
+  }
+
+  double get averageKmPerDay {
+    if (_mileageHistory.length < 2) return 50.0;
+    final recent = _mileageHistory.last;
+    final oldest = _mileageHistory.first;
+    
+    final recentDate = DateTime.tryParse(recent['timestamp']?.toString() ?? '');
+    final oldestDate = DateTime.tryParse(oldest['timestamp']?.toString() ?? '');
+    
+    if (recentDate == null || oldestDate == null) return 50.0;
+    
+    final days = recentDate.difference(oldestDate).inDays;
+    if (days <= 0) return 50.0;
+    
+    final recentMileage = (recent['mileage'] as num?)?.toDouble() ?? 0.0;
+    final oldestMileage = (oldest['mileage'] as num?)?.toDouble() ?? 0.0;
+    
+    return (recentMileage - oldestMileage) / days;
   }
 
   // Compatibility aliases for customized vehicle health gauges
@@ -66,13 +113,16 @@ class VehicleInsights extends ChangeNotifier {
   int get predictedServiceDueDaysInstance => predictedServiceDueDays;
 
   double get kmUntilService {
-    final difference = _nextServiceMileageKm - _currentMileageKm;
-    return difference < 0 ? 0 : difference;
+    final items = watchlistItems;
+    if (items.isEmpty) return 10000.0;
+    // Return the lowest remaining distance among all monitored components
+    return items.map((e) => e.remainingKm).reduce((a, b) => a < b ? a : b).clamp(0.0, double.infinity);
   }
 
   int get predictedServiceDueDays {
-    if (_averageDailyDistanceKm <= 0) return 0;
-    return (kmUntilService / _averageDailyDistanceKm).ceil();
+    final dailyAvg = averageKmPerDay;
+    if (dailyAvg <= 0) return 30;
+    return (kmUntilService / dailyAvg).ceil().clamp(0, 365);
   }
 
   double get recentTripCostPerKm {
@@ -90,6 +140,8 @@ class VehicleInsights extends ChangeNotifier {
     double? fuelCapacityLiters,
     double? recommendedTyrePressurePsi,
     double? engineOilCapacityLiters,
+    String? carType,
+    String? carColor,
   }) async {
     _model = model;
     _plate = plate;
@@ -100,20 +152,24 @@ class VehicleInsights extends ChangeNotifier {
     if (fuelCapacityLiters != null) _fuelCapacityLiters = fuelCapacityLiters;
     if (recommendedTyrePressurePsi != null) _recommendedTyrePressurePsi = recommendedTyrePressurePsi;
     if (engineOilCapacityLiters != null) _engineOilCapacityLiters = engineOilCapacityLiters;
+    if (carType != null) _carType = carType;
+    if (carColor != null) _carColor = carColor;
 
     // Update inside _vehicles list
     if (_vehicles.isNotEmpty && _activeVehicleIndex >= 0 && _activeVehicleIndex < _vehicles.length) {
-      _vehicles[_activeVehicleIndex] = {
-        'model': _model,
-        'plate': _plate,
-        'fuelType': _fuelType,
-        'currentMileageKm': _currentMileageKm,
-        'engine': _engine,
-        'transmission': _transmission,
-        'fuelCapacityLiters': _fuelCapacityLiters,
-        'recommendedTyrePressurePsi': _recommendedTyrePressurePsi,
-        'engineOilCapacityLiters': _engineOilCapacityLiters,
-      };
+      _vehicles[_activeVehicleIndex]['model'] = _model;
+      _vehicles[_activeVehicleIndex]['plate'] = _plate;
+      _vehicles[_activeVehicleIndex]['fuelType'] = _fuelType;
+      _vehicles[_activeVehicleIndex]['currentMileageKm'] = _currentMileageKm;
+      _vehicles[_activeVehicleIndex]['engine'] = _engine;
+      _vehicles[_activeVehicleIndex]['transmission'] = _transmission;
+      _vehicles[_activeVehicleIndex]['fuelCapacityLiters'] = _fuelCapacityLiters;
+      _vehicles[_activeVehicleIndex]['recommendedTyrePressurePsi'] = _recommendedTyrePressurePsi;
+      _vehicles[_activeVehicleIndex]['engineOilCapacityLiters'] = _engineOilCapacityLiters;
+      _vehicles[_activeVehicleIndex]['carType'] = _carType;
+      _vehicles[_activeVehicleIndex]['carColor'] = _carColor;
+      _vehicles[_activeVehicleIndex]['maintenanceData'] = _maintenanceData;
+      _vehicles[_activeVehicleIndex]['mileageHistory'] = _mileageHistory;
     }
     notifyListeners();
 
@@ -128,10 +184,53 @@ class VehicleInsights extends ChangeNotifier {
       await prefs.setDouble('vehicle_fuelCapacityLiters', _fuelCapacityLiters);
       await prefs.setDouble('vehicle_recommendedTyrePressurePsi', _recommendedTyrePressurePsi);
       await prefs.setDouble('vehicle_engineOilCapacityLiters', _engineOilCapacityLiters);
+      await prefs.setString('vehicle_carType', _carType);
+      await prefs.setString('vehicle_carColor', _carColor);
       await _saveVehiclesToPrefs();
     } catch (e) {
       debugPrint('SharedPreferences save error: $e');
     }
+  }
+
+  Future<void> updateCurrentMileage(double mileage) async {
+    if (mileage < _currentMileageKm) return; // Prevent reversing odometer
+    
+    _currentMileageKm = mileage;
+    _mileageHistory.add({
+      'mileage': mileage,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+    
+    // Keep only last 30 entries to save space/pref size
+    if (_mileageHistory.length > 30) _mileageHistory.removeAt(0);
+    
+    notifyListeners();
+    await updateVehicle(
+      model: _model,
+      plate: _plate,
+      fuelType: _fuelType,
+      currentMileageKm: _currentMileageKm,
+    );
+  }
+
+  Future<void> logMaintenance(List<String> itemNames, double mileage) async {
+    final now = DateTime.now().toIso8601String();
+    for (final name in itemNames) {
+      _maintenanceData[name] = {
+        'mileage': mileage,
+        'date': now,
+      };
+    }
+    
+    notifyListeners();
+    await updateVehicle(
+      model: _model,
+      plate: _plate,
+      fuelType: _fuelType,
+      currentMileageKm: _currentMileageKm,
+    );
+    
+    // TODO: Implement Atomic Firestore Sync here if cloud is enabled
   }
 
   Future<void> updateRecentTrip({
@@ -233,6 +332,10 @@ class VehicleInsights extends ChangeNotifier {
     _recommendedTyrePressurePsi = (v['recommendedTyrePressurePsi'] as num?)?.toDouble() ?? 36.0;
     _engineOilCapacityLiters = (v['engineOilCapacityLiters'] as num?)?.toDouble() ?? 3.0;
     _currentMileageKm = (v['currentMileageKm'] as num?)?.toDouble() ?? 38200;
+    _carType = v['carType'] ?? 'sedan';
+    _carColor = v['carColor'] ?? '#3B82F6';
+    _maintenanceData = Map<String, Map<String, dynamic>>.from(v['maintenanceData'] ?? {});
+    _mileageHistory = List<Map<String, dynamic>>.from(v['mileageHistory'] ?? []);
     
     notifyListeners();
     try {
@@ -266,6 +369,8 @@ class VehicleInsights extends ChangeNotifier {
       _fuelCapacityLiters = prefs.getDouble('vehicle_fuelCapacityLiters') ?? 36.0;
       _recommendedTyrePressurePsi = prefs.getDouble('vehicle_recommendedTyrePressurePsi') ?? 36.0;
       _engineOilCapacityLiters = prefs.getDouble('vehicle_engineOilCapacityLiters') ?? 3.0;
+      _carType = prefs.getString('vehicle_carType') ?? 'sedan';
+      _carColor = prefs.getString('vehicle_carColor') ?? '#3B82F6';
 
       // Load bookings
       final bookingsJsonList = prefs.getStringList('vehicle_bookings');
@@ -349,6 +454,8 @@ class VehicleInsights extends ChangeNotifier {
         _recommendedTyrePressurePsi = (v['recommendedTyrePressurePsi'] as num?)?.toDouble() ?? 36.0;
         _engineOilCapacityLiters = (v['engineOilCapacityLiters'] as num?)?.toDouble() ?? 3.0;
         _currentMileageKm = (v['currentMileageKm'] as num?)?.toDouble() ?? 38200.0;
+        _carType = v['carType'] ?? 'sedan';
+        _carColor = v['carColor'] ?? '#3B82F6';
       }
     } catch (e) {
       debugPrint('SharedPreferences load error: $e');
@@ -388,20 +495,43 @@ class VehicleInsights extends ChangeNotifier {
 class MaintenanceItem {
   final String name;
   final double currentMileage;
+  final double lastServiceMileage;
+  final DateTime lastServiceDate;
   final double interval;
 
   MaintenanceItem({
     required this.name,
     required this.currentMileage,
+    required this.lastServiceMileage,
+    required this.lastServiceDate,
     required this.interval,
   });
 
-  double get nextChangeMileage => (currentMileage / interval).floor() * interval + interval;
-  double get remainingKm => nextChangeMileage - currentMileage;
+  double get remainingKm => (lastServiceMileage + interval) - currentMileage;
+  
+  double get healthPercentage {
+    return (remainingKm / interval).clamp(0.0, 1.0) * 100;
+  }
+
+  double get nextChangeMileage => lastServiceMileage + interval;
+
+  int get monthsSinceService {
+    final now = DateTime.now();
+    return (now.year - lastServiceDate.year) * 12 + now.month - lastServiceDate.month;
+  }
   
   String get status {
-    if (remainingKm <= 1000) return 'Red';
-    if (remainingKm <= 3000) return 'Yellow';
+    if (remainingKm <= 500 || monthsSinceService >= 12) return 'Red';
+    if (remainingKm <= 2000 || monthsSinceService >= 10) return 'Yellow';
     return 'Green';
+  }
+
+  String get predictedDateStr {
+    final dailyAvg = VehicleInsights.instance.averageKmPerDay;
+    if (dailyAvg <= 0) return 'TBD';
+    final daysLeft = (remainingKm / dailyAvg).ceil();
+    if (daysLeft < 0) return 'Overdue';
+    final date = DateTime.now().add(Duration(days: daysLeft));
+    return '${date.day}/${date.month}/${date.year}';
   }
 }

@@ -72,7 +72,7 @@ class _FindWorkshopsTab extends StatefulWidget {
 }
 
 class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
-  String selectedCategory = 'All';
+  String selectedCategory = 'Repair';
   String searchQuery = '';
   double maxDistance = 5.0;
   List<Workshop> workshops = [];
@@ -80,11 +80,10 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
   Position? currentPosition;
 
   final List<Map<String, dynamic>> categories = [
-    {'name': 'All', 'icon': Icons.grid_view_rounded},
-    {'name': 'Repairer', 'icon': Icons.build_rounded},
-    {'name': 'Maintenance', 'icon': Icons.car_repair_rounded},
-    {'name': 'Tires', 'icon': Icons.tire_repair_rounded},
-    {'name': 'Wash', 'icon': Icons.local_car_wash_rounded},
+    {'name': 'Carwash', 'icon': Icons.local_car_wash_rounded},
+    {'name': 'Repair', 'icon': Icons.build_rounded},
+    {'name': 'Car Accessories', 'icon': Icons.settings_input_component_rounded},
+    {'name': 'Other', 'icon': Icons.more_horiz_rounded},
   ];
 
   @override
@@ -118,10 +117,14 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
     setState(() => isLoading = true);
     
     List<String>? includedTypes;
-    if (selectedCategory == 'Repairer') includedTypes = ['car_repair'];
-    else if (selectedCategory == 'Maintenance') includedTypes = ['car_repair'];
-    else if (selectedCategory == 'Tires') includedTypes = ['car_repair'];
-    else if (selectedCategory == 'Wash') includedTypes = ['car_wash'];
+    if (selectedCategory == 'Repair') {
+      includedTypes = ['car_repair'];
+    } else if (selectedCategory == 'Carwash') {
+      includedTypes = ['car_wash'];
+    } else if (selectedCategory == 'Car Accessories') {
+      includedTypes = ['auto_parts_store'];
+    }
+    // For 'Other', we leave includedTypes null to search broadly
 
     final results = await GoogleMapsService.searchNearbyWorkshops(
       LatLng(currentPosition!.latitude, currentPosition!.longitude),
@@ -131,8 +134,10 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
 
     if (mounted) {
       setState(() {
-        workshops = results.map((json) {
-          final w = Workshop.fromGooglePlace(json);
+        workshops = results
+            .map((json) => Workshop.fromGooglePlace(json))
+            .where((w) => !w.isGasStation) // Exclude gas stations here as per request
+            .map((w) {
           if (w.location != null && currentPosition != null) {
             final dist = Geolocator.distanceBetween(
               currentPosition!.latitude,

@@ -9,10 +9,16 @@ class WorkshopFirebaseService {
     return _firestore
         .collection('workshop_reviews')
         .where('place_id', isEqualTo: placeId)
-        .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => WorkshopReview.fromMap(doc.data())).toList();
+      final reviews = snapshot.docs.map((doc) => WorkshopReview.fromMap(doc.data())).toList();
+      // Sort locally to avoid needing a composite index in Firestore
+      reviews.sort((a, b) {
+        final dateA = a.timestamp ?? DateTime(0);
+        final dateB = b.timestamp ?? DateTime(0);
+        return dateB.compareTo(dateA);
+      });
+      return reviews;
     });
   }
 
