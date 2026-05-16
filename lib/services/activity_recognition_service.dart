@@ -33,19 +33,19 @@ class ActivityRecognitionService {
   }
 
   Future<void> _onActivityEvent(Activity event) async {
-    print('Activity Detected: \${event.type} with confidence \${event.confidence}');
+    print('Activity Detected: ${event.type} with confidence ${event.confidence}');
 
-    if (event.type == ActivityType.IN_VEHICLE && 
-        (event.confidence == ActivityConfidence.HIGH || event.confidence == ActivityConfidence.MEDIUM)) {
+    // Trigger only if IN_VEHICLE and confidence is HIGH (> 75%)
+    if (event.type == ActivityType.IN_VEHICLE && event.confidence == ActivityConfidence.HIGH) {
       if (!_isTracking) {
         // Check if there's already an active trip (Planned or Passive)
         final journeys = await JourneyDatabase.instance.getJourneys();
         bool hasActive = journeys.any((j) => j['end_time'] == null);
 
         if (!hasActive) {
-          print('Starting passive background journey...');
+          print('Starting passive background journey (PENDING_CONFIRMATION)...');
           _isTracking = true;
-          _pendingJourneyId = await JourneyDatabase.instance.startJourney(status: 'pending');
+          _pendingJourneyId = await JourneyDatabase.instance.startJourney(status: 'PENDING_CONFIRMATION');
           await LocationTracker.startTracking();
         } else {
           print('Active journey exists, yielding passive tracking.');
@@ -57,11 +57,7 @@ class ActivityRecognitionService {
         print('Ending passive background journey...');
         _isTracking = false;
         await LocationTracker.stopTracking();
-        
-        // Finalize the pending journey
-        // Total distance and Snap to roads will be handled inside stopTracking or we can do it here.
-        // It's cleaner to handle DB updates inside location_tracker.dart when it stops, 
-        // because location_tracker has the stream and total distance.
+        _pendingJourneyId = null;
       }
     }
   }

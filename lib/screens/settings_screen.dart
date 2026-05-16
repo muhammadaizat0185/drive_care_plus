@@ -399,10 +399,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: (isConnected ? Colors.green : Colors.grey).withOpacity(0.12),
+                        backgroundColor: (isConnected ? activeColor : Colors.grey).withOpacity(0.12),
                         child: Icon(
                           isConnected ? Icons.cloud_done : Icons.cloud_off,
-                          color: isConnected ? Colors.green : Colors.grey,
+                          color: isConnected ? activeColor : Colors.grey,
                         ),
                       ),
                       const SizedBox(width: 16),

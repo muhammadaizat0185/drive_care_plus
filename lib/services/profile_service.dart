@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProfileService extends ChangeNotifier {
   static final ProfileService instance = ProfileService._internal();
@@ -14,6 +15,8 @@ class ProfileService extends ChangeNotifier {
 
   double _walletBalance = 0.0;
   List<Map<String, dynamic>> _transactions = [];
+  bool _isPro = false;
+  DateTime? _subscriptionExpiry;
 
   String get displayName => _displayName;
   String get photoUrl => _photoUrl;
@@ -21,6 +24,8 @@ class ProfileService extends ChangeNotifier {
   String get bio => _bio;
   double get walletBalance => _walletBalance;
   List<Map<String, dynamic>> get transactions => _transactions;
+  bool get isPro => _isPro;
+  DateTime? get subscriptionExpiry => _subscriptionExpiry;
 
   static const List<String> presetAvatars = [
     'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80', // Default Casual
@@ -37,6 +42,34 @@ class ProfileService extends ChangeNotifier {
       if (user != null) {
         _displayName = user.displayName ?? 'Driver';
         _photoUrl = user.photoURL ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
+        
+        // Fetch extended profile and wallet from Firestore
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          final data = doc.data()!;
+          _walletBalance = (data['wallet_balance'] as num?)?.toDouble() ?? 0.0;
+          _isPro = data['is_pro'] ?? false;
+          if (data['subscription_expiry'] != null) {
+            _subscriptionExpiry = (data['subscription_expiry'] as Timestamp).toDate();
+          }
+          
+          // Check for expiry
+          if (_isPro && _subscriptionExpiry != null && DateTime.now().isAfter(_subscriptionExpiry!)) {
+            _isPro = false;
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'is_pro': false});
+          }
+        }
+
+        // Fetch transactions from sub-collection
+        final txnsSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('wallet_transactions')
+            .orderBy('date', descending: true)
+            .limit(50)
+            .get();
+        
+        _transactions = txnsSnap.docs.map((doc) => doc.data()).toList();
       }
 
       final prefs = await SharedPreferences.getInstance();
@@ -44,11 +77,14 @@ class ProfileService extends ChangeNotifier {
       _photoUrl = prefs.getString('user_photo_url') ?? _photoUrl;
       _phone = prefs.getString('user_phone') ?? _phone;
       _bio = prefs.getString('user_bio') ?? _bio;
-      _walletBalance = prefs.getDouble('wallet_balance') ?? 0.0;
       
-      final txnsJsonList = prefs.getStringList('wallet_transactions');
-      if (txnsJsonList != null) {
-        _transactions = txnsJsonList.map((str) => Map<String, dynamic>.from(jsonDecode(str))).toList();
+      // Fallback to prefs if Firestore is unavailable or not logged in
+      if (user == null) {
+        _walletBalance = prefs.getDouble('wallet_balance') ?? 0.0;
+        final txnsJsonList = prefs.getStringList('wallet_transactions');
+        if (txnsJsonList != null) {
+          _transactions = txnsJsonList.map((str) => Map<String, dynamic>.from(jsonDecode(str))).toList();
+        }
       }
     } catch (e) {
       debugPrint('Error loading profile: $e');
@@ -60,7 +96,7 @@ class ProfileService extends ChangeNotifier {
     _walletBalance += amount;
     final transaction = {
       'amount': amount,
-      'type': type, // 'top_up' or 'deduction'
+      'type': type, // 'top_up', 'deduction', 'subscription'
       'description': description,
       'date': DateTime.now().toIso8601String(),
     };
@@ -68,12 +104,43 @@ class ProfileService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Update Firestore
+        final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+        await userRef.set({
+          'wallet_balance': _walletBalance,
+        }, SetOptions(merge: true));
+        
+        await userRef.collection('wallet_transactions').add(transaction);
+      }
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble('wallet_balance', _walletBalance);
       final jsonList = _transactions.map((t) => jsonEncode(t)).toList();
       await prefs.setStringList('wallet_transactions', jsonList);
     } catch (e) {
-      debugPrint('SharedPreferences save wallet error: $e');
+      debugPrint('Error saving transaction: $e');
+    }
+  }
+
+  Future<void> initializeProSubscription() async {
+    _isPro = true;
+    _subscriptionExpiry = DateTime.now().add(const Duration(days: 30));
+    notifyListeners();
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'is_pro': true,
+          'subscription_expiry': Timestamp.fromDate(_subscriptionExpiry!),
+        }, SetOptions(merge: true));
+
+        await addWalletTransaction(0, 'subscription', 'Pro Subscription Initialized');
+      }
+    } catch (e) {
+      debugPrint('Error initializing subscription: $e');
     }
   }
 

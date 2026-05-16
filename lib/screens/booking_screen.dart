@@ -17,16 +17,17 @@ class BookingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
               ? [
                   const Color(0xFF0F172A), // Deep Slate Dark
-                  const Color(0xFF022C22), // Deep Obsidian Dark Green
+                  primaryColor.withOpacity(0.2), // Themed Dark
                 ]
               : [
-                  const Color(0xFFEFFDF5), // Soft pastel mint
+                  primaryColor.withOpacity(0.05), // Soft themed pastel
                   const Color(0xFFF9FAFB), // Soft premium grey
                 ],
           begin: Alignment.topCenter,
@@ -460,14 +461,14 @@ class _MyBookingsTab extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade50,
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green.shade200),
+                            border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
                           ),
                           child: Text(
                             status,
                             style: TextStyle(
-                              color: Colors.green.shade700,
+                              color: Theme.of(context).colorScheme.primary,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
