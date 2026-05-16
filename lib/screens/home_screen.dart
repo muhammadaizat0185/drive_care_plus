@@ -18,7 +18,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/onboarding_guide.dart';
 import '../widgets/wallet_top_up_sheet.dart';
 import 'wallet_history_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/activity_recognition_service.dart';
+import '../services/toyyibpay_service.dart';
+import 'toyyibpay_webview_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -120,13 +123,55 @@ class _HomeScreenState extends State<HomeScreen> {
             ? AppBar(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
-                title: Text(
-                  'DriveCare+',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.8,
-                    color: charcoalColor,
-                  ),
+                title: ListenableBuilder(
+                  listenable: ProfileService.instance,
+                  builder: (context, _) {
+                    final isPro = ProfileService.instance.isPro;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'DriveCare+',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.8,
+                            color: charcoalColor,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: isPro
+                                ? const LinearGradient(
+                                    colors: [Color(0xFF00B894), Color(0xFF00CEC9)],
+                                  )
+                                : null,
+                            color: isPro ? null : Colors.grey.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isPro) ...[
+                                const Icon(Icons.verified, color: Colors.white, size: 12),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                isPro ? 'PRO' : 'BASIC',
+                                style: TextStyle(
+                                  color: isPro ? Colors.white : Colors.grey,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 actions: [
                   IconButton(
@@ -207,7 +252,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           activeIcon: Icon(Icons.storefront),
                           label: 'Workshops',
                         ),
-                        // Center tab is My Car (Index 2)
                         BottomNavigationBarItem(
                           icon: Icon(Icons.directions_car_outlined),
                           activeIcon: Icon(Icons.directions_car),
@@ -221,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         BottomNavigationBarItem(
                           icon: Icon(Icons.folder_copy_outlined),
                           activeIcon: Icon(Icons.folder_copy),
-                          label: 'Vault',
+                          label: 'Wallet',
                         ),
                       ],
                     ),
@@ -264,9 +308,19 @@ class _HomeCockpitBody extends StatelessWidget {
     }
   }
 
+  void _showSubscriptionModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => const _ProSubscriptionSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 110),
@@ -281,138 +335,54 @@ class _HomeCockpitBody extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Hello, ${profile.displayName}! 👋',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.6,
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.white
-                                  : const Color(0xFF1F2937),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Welcome to your vehicle center',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 13,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () => _navigateTo(context, VehicleScreen.routeName),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.primary.withAlpha(80),
-                              width: 2.0,
-                            ),
-                          ),
-                          child: CircleAvatar(
-                            radius: 22,
-                            backgroundImage: NetworkImage(profile.photoUrl),
-                            backgroundColor: Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // Digital Wallet Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Theme.of(context).colorScheme.primary,
-                          Theme.of(context).colorScheme.primary.withBlue(150),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => Navigator.pushNamed(context, WalletHistoryScreen.routeName),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Text(
-                                    'DriveCare+ Wallet',
-                                    style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.history,
-                                    size: 14,
-                                    color: Colors.white.withOpacity(0.6),
-                                  ),
-                                ],
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Hello, ${profile.displayName}! 👋',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.6,
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white
+                                    : const Color(0xFF1F2937),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'RM ${profile.walletBalance.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -1,
-                                ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Welcome to your vehicle center',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                                letterSpacing: 0.5,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Theme.of(context).colorScheme.primary,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, SettingsScreen.routeName),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.primary.withAlpha(50),
+                                width: 2.0,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 28,
+                              backgroundImage: NetworkImage(profile.photoUrl),
+                              backgroundColor: Colors.grey.shade200,
+                            ),
                           ),
-                          onPressed: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (context) => const WalletTopUpSheet(),
-                            );
-                          },
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Top Up', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              );
+                  ],
+                );
               } catch (e, stackTrace) {
                 return Card(
                   color: Colors.red.withOpacity(0.1),
@@ -424,11 +394,166 @@ class _HomeCockpitBody extends StatelessWidget {
               }
             },
           ),
-          const SizedBox(height: 28), // Point 5: Spacing breathability
-
-          // Live Custom Health Gauge
+          const SizedBox(height: 28),
           const VehicleHealthGauge(),
-          const SizedBox(height: 28), // Point 5: Spacing breathability
+          const SizedBox(height: 28),
+          // Wallet & Vault Row (Moved below Car Health)
+          ListenableBuilder(
+            listenable: ProfileService.instance,
+            builder: (context, _) {
+              final profile = ProfileService.instance;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final primaryColor = Theme.of(context).colorScheme.primary;
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 7,
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [primaryColor, primaryColor.withBlue(200).withGreen(200)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryColor.withOpacity(0.3),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Text(
+                                    'DriveCare+ Wallet',
+                                    style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.help_outline, color: Colors.white70, size: 14),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'RM ${profile.walletBalance.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -1,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (context) => const WalletTopUpSheet(),
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.add, color: primaryColor, size: 18),
+                                          const SizedBox(width: 4),
+                                          Text("Top Up", style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 3,
+                        child: GestureDetector(
+                          onTap: () => HomeScreen.activeTabNotifier.value = 4, // Switch to Vault/Wallet tab
+                          child: Container(
+                            height: 104, // Roughly match wallet card height
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [primaryColor, primaryColor.withBlue(200).withGreen(200)],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.folder_copy, color: Colors.white, size: 28),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text('Vault', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Pro Subscription Initialization Trigger (If not Pro)
+                  if (!profile.isPro) ...[
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () => _showSubscriptionModal(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFF00B894).withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.auto_awesome, color: Color(0xFF00B894)),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Upgrade to Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text('Unlock AI Insights & Passive Tracking', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right, color: isDark ? Colors.white38 : Colors.black26),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 28),
 
           ListenableBuilder(
             listenable: VehicleInsights.instance,
@@ -441,33 +566,43 @@ class _HomeCockpitBody extends StatelessWidget {
                 children: [
                   if (bookings.isNotEmpty) ...[
                     // Point 1: Frosted Liquid glassmorphism "Upcoming Appointment" card wrapper
-                    GlassContainer(
-                      borderRadius: 24,
-                      opacity: 0.15,
-                      borderColor: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         leading: Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-                            shape: BoxShape.circle,
+                            color: primaryColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Icon(
-                            Icons.event_available,
-                            color: Theme.of(context).colorScheme.primary,
+                            Icons.calendar_today,
+                            color: primaryColor,
                           ),
                         ),
-                         title: Text(
+                        title: Text(
                           'Upcoming Appointment',
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 14,
-                            color: isDark ? Colors.white : const Color(0xFF1F2937), // Point 3: Charcoal soft contrast
+                            color: isDark ? Colors.white : const Color(0xFF1F2937),
                           ),
                         ),
                         subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 6.0),
+                          padding: const EdgeInsets.only(top: 4.0),
                           child: Text(
                             '${bookings.first['workshopName']}\n${bookings.first['serviceName']} • ${bookings.first['date']} at ${bookings.first['time']}',
                             style: TextStyle(
@@ -477,12 +612,11 @@ class _HomeCockpitBody extends StatelessWidget {
                             ),
                           ),
                         ),
-                        isThreeLine: true,
                         trailing: Icon(
                           Icons.chevron_right,
-                          color: isDark ? Colors.white70 : const Color(0xFF1F2937),
+                          color: isDark ? Colors.white38 : Colors.black26,
                         ),
-                        onTap: () => _navigateTo(context, BookingScreen.routeName),
+                        onTap: () => HomeScreen.activeTabNotifier.value = 1,
                       ),
                     ),
                   ],
@@ -492,21 +626,31 @@ class _HomeCockpitBody extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           // Trip Planner Button
-          GlassContainer(
-            borderRadius: 24,
-            opacity: 0.15,
-            borderColor: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey.withOpacity(0.1)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               leading: Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-                  shape: BoxShape.circle,
+                  color: primaryColor.withOpacity(0.12), // Very soft theme primary
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  Icons.map_outlined,
-                  color: Theme.of(context).colorScheme.primary,
+                  Icons.map,
+                  color: primaryColor,
                 ),
               ),
               title: Text(
@@ -518,7 +662,7 @@ class _HomeCockpitBody extends StatelessWidget {
                 ),
               ),
               subtitle: Padding(
-                padding: const EdgeInsets.only(top: 6.0),
+                padding: const EdgeInsets.only(top: 4.0),
                 child: Text(
                   'Plan your routes and visualize dynamic directions.',
                   style: TextStyle(
@@ -530,28 +674,38 @@ class _HomeCockpitBody extends StatelessWidget {
               ),
               trailing: Icon(
                 Icons.chevron_right,
-                color: isDark ? Colors.white70 : const Color(0xFF1F2937),
+                color: isDark ? Colors.white38 : Colors.black26,
               ),
               onTap: () => _navigateTo(context, TripPlannerScreen.routeName),
             ),
           ),
           const SizedBox(height: 16),
           // Journey Log Button
-          GlassContainer(
-            borderRadius: 24,
-            opacity: 0.15,
-            borderColor: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey.withOpacity(0.1)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               leading: Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-                  shape: BoxShape.circle,
+                  color: primaryColor.withOpacity(0.12), // Very soft theme primary
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  Icons.explore_outlined,
-                  color: Theme.of(context).colorScheme.primary,
+                  Icons.explore,
+                  color: primaryColor,
                 ),
               ),
               title: Text(
@@ -563,7 +717,7 @@ class _HomeCockpitBody extends StatelessWidget {
                 ),
               ),
               subtitle: Padding(
-                padding: const EdgeInsets.only(top: 6.0),
+                padding: const EdgeInsets.only(top: 4.0),
                 child: Text(
                   'View history of recorded trips and statistics offline.',
                   style: TextStyle(
@@ -575,11 +729,148 @@ class _HomeCockpitBody extends StatelessWidget {
               ),
               trailing: Icon(
                 Icons.chevron_right,
-                color: isDark ? Colors.white70 : const Color(0xFF1F2937),
+                color: isDark ? Colors.white38 : Colors.black26,
               ),
               onTap: () => _navigateTo(context, JourneyLogScreen.routeName),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProSubscriptionSheet extends StatefulWidget {
+  const _ProSubscriptionSheet();
+
+  @override
+  State<_ProSubscriptionSheet> createState() => _ProSubscriptionSheetState();
+}
+
+class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
+  bool _isProcessing = false;
+
+  Future<void> _startSubscriptionPayment() async {
+    setState(() => _isProcessing = true);
+
+    final user = FirebaseAuth.instance.currentUser;
+    final payerName = user?.displayName ?? 'DriveCare Driver';
+    final payerEmail = user?.email ?? 'driver@drivecareplus.com';
+    final payerPhone = ProfileService.instance.phone.replaceAll(RegExp(r'[^\d]'), '');
+
+    final billCode = await ToyyibPayService.createSubscriptionBill(
+      payerName: payerName,
+      payerEmail: payerEmail,
+      payerPhone: payerPhone,
+    );
+
+    if (billCode == null) {
+      setState(() => _isProcessing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error creating subscription bill.'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+    final checkoutUrl = 'https://dev.toyyibpay.com/$billCode';
+    if (mounted) {
+      final result = await Navigator.push<bool?>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ToyyibPayWebViewScreen(
+            checkoutUrl: checkoutUrl,
+            returnUrl: ToyyibPayService.returnUrl,
+          ),
+        ),
+      );
+
+      setState(() => _isProcessing = false);
+
+      if (result == true) {
+        await ProfileService.instance.initializeProSubscription();
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Welcome to Pro! Subscription active. ✨'), backgroundColor: Colors.green),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00B894).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.auto_awesome, color: Color(0xFF00B894), size: 32),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'DriveCare+ Pro',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'RM 19.90 / month',
+            style: TextStyle(color: Color(0xFF00B894), fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          const SizedBox(height: 24),
+          _buildFeatureRow(Icons.psychology, 'AI-Powered Maintenance Predictions'),
+          _buildFeatureRow(Icons.history_toggle_off, 'Passive Trip Detection & Recording'),
+          _buildFeatureRow(Icons.cloud_sync, 'Unlimited Cloud Log Backups'),
+          _buildFeatureRow(Icons.analytics, 'Deep Fuel Efficiency Analytics'),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00B894),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+              onPressed: _isProcessing ? null : _startSubscriptionPayment,
+              child: _isProcessing
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('Subscribe & Unlock Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Maybe Later', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFF00B894)),
+          const SizedBox(width: 12),
+          Text(text, style: const TextStyle(fontSize: 14)),
         ],
       ),
     );

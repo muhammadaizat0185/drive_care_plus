@@ -128,13 +128,13 @@ class _CloudSyncQuotaCardState extends State<CloudSyncQuotaCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: (isConnected ? Colors.green : Colors.grey).withOpacity(0.12),
+                  color: (isConnected ? primaryColor : Colors.grey).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   isConnected ? 'Connected' : 'Offline',
                   style: TextStyle(
-                    color: isConnected ? Colors.green : Colors.grey,
+                    color: isConnected ? primaryColor : Colors.grey,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),

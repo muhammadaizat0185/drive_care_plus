@@ -216,7 +216,7 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
                                               : Border.all(color: Colors.transparent, width: 2),
                                           borderRadius: BorderRadius.circular(26),
                                         ),
-                                        child: journey['status'] == 'pending'
+                                        child: (journey['status'] == 'pending' || journey['status'] == 'PENDING_CONFIRMATION')
                                             ? PendingJourneyCard(
                                                 journey: journey,
                                                 onConfirmMyCar: () => _confirmVehicle(journey['id'], 'my_car'),

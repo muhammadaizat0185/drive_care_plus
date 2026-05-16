@@ -84,4 +84,48 @@ class ToyyibPayService {
     }
     return null;
   }
+
+  /// Creates a bill specifically for the Pro Subscription
+  static Future<String?> createSubscriptionBill({
+    required String payerName,
+    required String payerEmail,
+    required String payerPhone,
+  }) async {
+    final url = Uri.parse('$baseUrl/createBill');
+    
+    // Pro Subscription Price: RM 19.90 (Fixed for this project context)
+    const subscriptionAmount = 19.90;
+    final priceInCents = (subscriptionAmount * 100).toInt().toString();
+
+    String formattedPhone = payerPhone.replaceAll(RegExp(r'[^\d]'), '');
+    if (formattedPhone.isEmpty) formattedPhone = '0123456789';
+
+    final requestBody = {
+      'userSecretKey': secretKey,
+      'categoryCode': categoryCode,
+      'billName': 'DriveCare+ Pro Subscription',
+      'billDescription': 'Unlock premium AI analytics and background tracking',
+      'billPriceSetting': '0',
+      'billPayorInfo': '1',
+      'billAmount': priceInCents,
+      'billTo': payerName,
+      'billEmail': payerEmail,
+      'billPhone': formattedPhone,
+      'billReturnUrl': returnUrl,
+      'billCallbackUrl': returnUrl,
+    };
+
+    try {
+      final response = await http.post(url, body: requestBody);
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List && decoded.isNotEmpty) {
+          return decoded[0]['BillCode'] as String?;
+        }
+      }
+    } catch (e) {
+      debugPrint('ToyyibPay createSubscriptionBill Exception: $e');
+    }
+    return null;
+  }
 }

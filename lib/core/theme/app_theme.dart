@@ -4,12 +4,18 @@ import 'package:flutter/material.dart';
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData buildTheme(Color primaryColor, Brightness brightness) {
+  static ThemeData buildTheme(Color baseColor, Brightness brightness) {
     final isDark = brightness == Brightness.dark;
     
+    // Adjust primary color for contrast based on theme mode
+    final hsl = HSLColor.fromColor(baseColor);
+    final Color adjustedPrimary = isDark 
+      ? hsl.withLightness((hsl.lightness + 0.35).clamp(0.0, 0.9)).withSaturation((hsl.saturation + 0.3).clamp(0.0, 1.0)).toColor()
+      : hsl.withLightness((hsl.lightness - 0.1).clamp(0.2, 1.0)).toColor();
+
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: primaryColor,
-      primary: primaryColor,
+      seedColor: adjustedPrimary,
+      primary: adjustedPrimary,
       brightness: brightness,
       surface: isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
     );
@@ -37,7 +43,7 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
           elevation: 0,
-          backgroundColor: primaryColor,
+          backgroundColor: adjustedPrimary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),

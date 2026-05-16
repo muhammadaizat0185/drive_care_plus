@@ -81,6 +81,7 @@ flutter:
     - assets/images/logo/
     - assets/images/cars/
     - assets/images/cars/Car Vector/SVG/
+    - assets/images/cars/Car Vector/PNG/
     - assets/images/manufacturers/
 
   # To add assets to your application, add an assets section, like this:

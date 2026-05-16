@@ -12,166 +12,212 @@ class VehicleHealthGauge extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final insights = VehicleInsights.instance;
-    
-    // Get the most urgent health percentage from all watchlist items
-    final watchlist = insights.watchlistItems;
-    double rawPercentage = 1.0;
-    if (watchlist.isNotEmpty) {
-      final minHealth = watchlist.map((e) => e.healthPercentage).reduce((a, b) => a < b ? a : b);
-      rawPercentage = (minHealth / 100.0).clamp(0.0, 1.0);
-    }
-    
-    final kmLeft = insights.kmUntilServiceInstance;
-    final displayPercentage = (rawPercentage * 100).toInt();
 
-    final Color primaryColor = Theme.of(context).colorScheme.primary;
-    final isCritical = kmLeft <= 500;
+    return ListenableBuilder(
+      listenable: insights,
+      builder: (context, child) {
+        // Get the most urgent health percentage from all watchlist items
+        final watchlist = insights.watchlistItems;
+        double rawPercentage = 1.0;
+        if (watchlist.isNotEmpty) {
+          final minHealth = watchlist.map((e) => e.healthPercentage).reduce((a, b) => a < b ? a : b);
+          rawPercentage = (minHealth / 100.0).clamp(0.0, 1.0);
+        }
 
-    return GlassContainer(
-      borderRadius: 24,
-      padding: const EdgeInsets.all(22),
-      opacity: 0.1,
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        final kmLeft = insights.kmUntilServiceInstance;
+        final displayPercentage = (rawPercentage * 100).toInt();
+
+        final Color primaryColor = Theme.of(context).colorScheme.primary;
+        final isCritical = kmLeft <= 500;
+
+        // Determine asset path based on carType
+        String assetName;
+        switch (insights.carType.toLowerCase()) {
+          case 'sedan': assetName = 'Sedan Front.png'; break;
+          case 'suv': assetName = 'SUV Front.png'; break;
+          case 'jeep': assetName = 'Jeep Front.png'; break;
+          case 'pickup': assetName = 'Pickup Front.png'; break;
+          case 'sport': assetName = 'Sport Front.png'; break;
+          case 'coupe': assetName = 'Coupe Front.png'; break;
+          case 'cabriolet': assetName = 'Cabriolet Front.png'; break;
+          case 'compact':
+          default: assetName = 'Compact Front.png'; break;
+        }
+        final assetPath = 'assets/images/cars/Car Vector/PNG/$assetName';
+
+        return GlassContainer(
+          borderRadius: 24,
+          padding: const EdgeInsets.all(20),
+          opacity: 0.1,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Car Health',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : const Color(0xFF1F2937), // Point 3: Charcoal soft contrast
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Car Health',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : const Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        insights.model.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'MAINTENANCE STATUS',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0, // Point 3: Kerning/letter-spacing increase
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: (isCritical ? Colors.red : primaryColor).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      isCritical ? 'Service Due!' : 'Healthy',
+                      style: TextStyle(
+                        color: isCritical ? Colors.red : primaryColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: (isCritical ? Colors.red : primaryColor).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  isCritical ? 'Service Due!' : 'Healthy',
-                  style: TextStyle(
-                    color: isCritical ? Colors.red : primaryColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+              const SizedBox(height: 12),
+              // Car Illustration Center with Toggle Buttons
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Center(
+                    child: Image.asset(
+                      assetPath,
+                      height: 140,
+                      fit: BoxFit.contain,
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              // Point 4: Glowing Custom Circular Gauge Painter
-              SizedBox(
-                width: 100,
-                height: 100,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    CustomPaint(
-                      size: const Size(100, 100),
-                      painter: _HealthGaugePainter(
-                        percentage: rawPercentage,
-                        activeColor: isCritical ? Colors.red : primaryColor,
-                        trackColor: Colors.grey.withOpacity(0.1),
+                  if (insights.vehicles.length > 1)
+                    Positioned(
+                      right: -10,
+                      child: IconButton(
+                        icon: const Icon(Icons.chevron_right, size: 32, color: Colors.grey),
+                        onPressed: () {
+                          final nextIndex = (insights.activeVehicleIndex + 1) % insights.vehicles.length;
+                          insights.setActiveVehicle(nextIndex);
+                        },
                       ),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
+                  if (insights.vehicles.length > 1)
+                    Positioned(
+                      left: -10,
+                      child: IconButton(
+                        icon: const Icon(Icons.chevron_left, size: 32, color: Colors.grey),
+                        onPressed: () {
+                          final prevIndex = (insights.activeVehicleIndex - 1 + insights.vehicles.length) % insights.vehicles.length;
+                          insights.setActiveVehicle(prevIndex);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Bottom Row with Gauge and Info
+              Row(
+                children: [
+                  // Circular Gauge
+                  SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CustomPaint(
+                          size: const Size(80, 80),
+                          painter: _HealthGaugePainter(
+                            percentage: rawPercentage,
+                            activeColor: isCritical ? Colors.red : primaryColor,
+                            trackColor: Colors.grey.withOpacity(0.1),
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '$displayPercentage%',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                color: isCritical
+                                    ? Colors.red
+                                    : (isDark ? Colors.white : const Color(0xFF1F2937)),
+                              ),
+                            ),
+                            const Text(
+                              'STATUS',
+                              style: TextStyle(
+                                fontSize: 8,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  // Mileage Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$displayPercentage%',
+                          '${kmLeft.toStringAsFixed(0)} km',
                           style: TextStyle(
+                            fontSize: 22,
                             fontWeight: FontWeight.w900,
-                            fontSize: 20,
-                            color: isCritical
-                                ? Colors.red
-                                : (isDark ? Colors.white : const Color(0xFF1F2937)),
+                            color: isDark ? Colors.white : const Color(0xFF1F2937),
                           ),
                         ),
                         const Text(
-                          'STATUS',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.grey,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
+                          'Remaining until next service',
+                          style: TextStyle(color: Colors.grey, fontSize: 11),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_month_outlined, size: 16, color: Colors.grey.shade400),
+                            const SizedBox(width: 6),
+                            Text(
+                              '~${insights.predictedServiceDueDaysInstance} Days left',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? Colors.white70 : Colors.black87,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 28),
-              // Textual Breakdown
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${kmLeft.toStringAsFixed(0)} km',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : const Color(0xFF1F2937), // Point 3: Charcoal soft contrast
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Remaining until next service',
-                      style: TextStyle(color: Colors.grey, fontSize: 11),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
-                        const SizedBox(width: 6),
-                        Text(
-                          '~${insights.predictedServiceDueDaysInstance} Days left',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 24),
-
-          // Point 2 & 6: Micro-interactive Animated Tactile Gradient Button
-          _AnimatedGradientButton(
-            isCritical: isCritical,
-            primaryColor: primaryColor,
-            onTap: () {
-              HomeScreen.activeTabNotifier.value = 1;
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
