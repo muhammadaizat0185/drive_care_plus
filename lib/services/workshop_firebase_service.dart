@@ -108,4 +108,19 @@ class WorkshopFirebaseService {
               .toList(),
         );
   }
+  /// Cancels a booking by setting its status to 'Cancelled'.
+  Future<void> cancelBooking(String bookingId) async {
+    await _firestore.collection('bookings').doc(bookingId).update(<String, Object>{
+      'status': 'Cancelled',
+    });
+  }
+
+  /// Reschedules a booking with a new date and time and resets its status to 'Pending'.
+  Future<void> rescheduleBooking(String bookingId, String isoDate, String timeString) async {
+    await _firestore.collection('bookings').doc(bookingId).update(<String, Object>{
+      'date': isoDate,
+      'time': timeString,
+      'status': 'Pending',
+    });
+  }
 }

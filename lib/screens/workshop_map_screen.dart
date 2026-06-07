@@ -189,10 +189,39 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
 
   // ---- My Bookings callbacks ------------------------------------------
 
-  void _onReschedule(String bookingId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Rescheduling $bookingId')),
+  Future<void> _onReschedule(String bookingId) async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
     );
+    if (pickedDate == null || !mounted) return;
+
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 10, minute: 0),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    try {
+      await _service.rescheduleBooking(
+        bookingId,
+        pickedDate.toIso8601String(),
+        '${pickedTime.hour}:${pickedTime.minute}',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking rescheduled successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reschedule booking: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _onCancelBooking(String bookingId) async {
@@ -226,9 +255,20 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
       ),
     );
     if (confirmed == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cancelled $bookingId')),
-      );
+      try {
+        await _service.cancelBooking(bookingId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Booking cancelled successfully')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to cancel booking: $e')),
+          );
+        }
+      }
     }
   }
 

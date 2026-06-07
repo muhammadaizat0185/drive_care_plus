@@ -376,19 +376,7 @@ class VehicleInsights extends ChangeNotifier {
       if (bookingsJsonList != null) {
         _bookings = bookingsJsonList.map((str) => Map<String, dynamic>.from(jsonDecode(str))).toList();
       } else {
-        // Seed a default upcoming premium booking
-        final tomorrow = DateTime.now().add(const Duration(days: 1));
-        _bookings = [
-          {
-            'workshopId': 'w1',
-            'workshopName': 'Perodua Auto Care Specialist',
-            'serviceName': 'Major Service Package',
-            'servicePrice': 180.0,
-            'date': '${tomorrow.day}/${tomorrow.month}/${tomorrow.year}',
-            'time': '10:00 AM',
-            'status': 'Confirmed',
-          }
-        ];
+        _bookings = [];
         await _saveBookingsToPrefs();
       }
 
