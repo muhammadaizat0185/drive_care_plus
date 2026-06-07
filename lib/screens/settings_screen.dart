@@ -137,148 +137,157 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
 
     return AppBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-        title: const Text(
-          'Settings',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      // Listen to controllers + `ProfileService` + `ThemeService` +
-      // `NotificationPreferences` so:
-      //
-      //   * controller edits flip the unsaved-changes banner on (8.3),
-      //   * `ProfileService` notifications flip it off when the save
-      //     succeeds (controller text now matches the persisted
-      //     snapshot — Requirement 6.3),
-      //   * `ThemeService` notifications still rebuild the body so
-      //     the swatch / dark-mode wiring landing in tasks 8.5 / 8.6
-      //     keeps working.
-      //   * `NotificationPreferences` notifications rebuild the
-      //     `NOTIFICATIONS` row when a toggle flips (task 8.8 —
-      //     Requirement 6.6).
-      body: ListenableBuilder(
+      child: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           _nameController,
           _phoneController,
           ProfileService.instance,
           ThemeService.instance,
           NotificationPreferences.instance,
+          _saveGate,
         ]),
         builder: (BuildContext context, Widget? _) {
-          return ListView(
-            padding: EdgeInsets.symmetric(
-              horizontal: spacing.lg,
-              vertical: spacing.lg,
+          final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              title: const Text(
+                'Settings',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              actions: <Widget>[
+                if (_saveGate.isRunning)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.0,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  TextButton(
+                    onPressed: _isDirty ? _onSavePressed : null,
+                    child: Text(
+                      'Save',
+                      style: TextStyle(
+                        color: _isDirty
+                            ? colors.emerald500
+                            : colors.foreground.withValues(
+                                alpha: colors.surfaceProminent + 0.2,
+                              ),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16.0,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            children: <Widget>[
-              // Save-failure banner (task 8.12 — Requirement 6.10).
-              // Rendered above the dirty banner so a recent failure
-              // takes visual precedence over the older "unsaved
-              // changes" indicator. Edited values are retained in the
-              // controllers so the user can fix and retry without
-              // retyping. The banner is dismissable via its built-in
-              // dismiss icon, which clears `_saveError`.
-              if (_saveError != null) ...<Widget>[
-                AppFeedbackBanner(
-                  kind: FeedbackKind.error,
-                  message: _saveError!,
-                  onDismiss: () => setState(() => _saveError = null),
+            body: ListView(
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.lg,
+                vertical: spacing.lg,
+              ),
+              children: <Widget>[
+                // Save-failure banner (task 8.12 — Requirement 6.10).
+                if (_saveError != null) ...<Widget>[
+                  AppFeedbackBanner(
+                    kind: FeedbackKind.error,
+                    message: _saveError!,
+                    onDismiss: () => setState(() => _saveError = null),
+                  ),
+                  SizedBox(height: spacing.lg),
+                ],
+
+                // Unsaved-changes banner (task 8.3 — Requirement 6.3).
+                if (_isDirty) ...<Widget>[
+                  const AppFeedbackBanner(
+                    kind: FeedbackKind.warning,
+                    message: 'You have unsaved changes.',
+                  ),
+                  SizedBox(height: spacing.lg),
+                ],
+
+                // 1. PROFILE — avatar, name, phone, Save Profile (task 8.2).
+                const AppSectionHeader(label: 'PROFILE'),
+                AppCard(
+                  child: _ProfileSection(
+                    nameController: _nameController,
+                    phoneController: _phoneController,
+                    saveGate: _saveGate,
+                    nameError: _nameError,
+                    phoneError: _phoneError,
+                    onNameChanged: _onNameChanged,
+                    onPhoneChanged: _onPhoneChanged,
+                    onChangeAvatarPressed: _onChangeAvatarPressed,
+                  ),
                 ),
-                SizedBox(height: spacing.lg),
+                SizedBox(height: spacing.xxl),
+
+                // 2. APPEARANCE — dark-mode toggle + swatch grid (task 8.5).
+                const AppSectionHeader(label: 'APPEARANCE'),
+                const AppCard(
+                  child: _AppearanceSection(),
+                ),
+                SizedBox(height: spacing.xxl),
+
+                // 3. NOTIFICATIONS — three preference toggles (task 8.8).
+                const AppSectionHeader(label: 'NOTIFICATIONS'),
+                const AppCard(
+                  child: _NotificationsSection(),
+                ),
+                SizedBox(height: spacing.xxl),
+
+                // 4. PRIVACY & SECURITY — list tiles (task 8.10).
+                const AppSectionHeader(label: 'PRIVACY & SECURITY'),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: _PrivacySecuritySection(onAction: _showComingSoon),
+                ),
+                SizedBox(height: spacing.xxl),
+
+                // 5. DATA & STORAGE — list tiles (task 8.10).
+                const AppSectionHeader(label: 'DATA & STORAGE'),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: _DataStorageSection(onAction: _showComingSoon),
+                ),
+                SizedBox(height: spacing.xxl),
+
+                // 6. PREFERENCES — list tiles (task 8.10).
+                const AppSectionHeader(label: 'PREFERENCES'),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: _PreferencesSection(onAction: _showComingSoon),
+                ),
+                SizedBox(height: spacing.xxl),
+
+                // 7. ABOUT & SUPPORT — list tiles (task 8.10).
+                const AppSectionHeader(label: 'ABOUT & SUPPORT'),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: _AboutSupportSection(onAction: _showComingSoon),
+                ),
+                SizedBox(height: spacing.xxl),
+
+                // 8. Sign Out — full functionality wired in task 8.11.
+                AppSecondaryButton(
+                  label: 'Sign Out',
+                  icon: Icons.logout_rounded,
+                  fullWidth: true,
+                  onPressed: _onSignOutPressed,
+                ),
+                SizedBox(height: spacing.xxl),
               ],
-
-              // Unsaved-changes banner (task 8.3 — Requirement 6.3).
-              // Rendered above every section so the warning is the
-              // first thing a user sees when they scroll to the top
-              // of the form, and removed automatically when
-              // controller text matches the persisted profile
-              // again.
-              if (_isDirty) ...<Widget>[
-                const AppFeedbackBanner(
-                  kind: FeedbackKind.warning,
-                  message: 'You have unsaved changes.',
-                ),
-                SizedBox(height: spacing.lg),
-              ],
-
-              // 1. PROFILE — avatar, name, phone, Save Profile (task 8.2).
-              const AppSectionHeader(label: 'PROFILE'),
-              AppCard(
-                child: _ProfileSection(
-                  nameController: _nameController,
-                  phoneController: _phoneController,
-                  saveGate: _saveGate,
-                  nameError: _nameError,
-                  phoneError: _phoneError,
-                  onSavePressed: _onSavePressed,
-                  onNameChanged: _onNameChanged,
-                  onPhoneChanged: _onPhoneChanged,
-                  onChangeAvatarPressed: _onChangeAvatarPressed,
-                ),
-              ),
-              SizedBox(height: spacing.xl),
-
-              // 2. APPEARANCE — dark-mode toggle + swatch grid (task 8.5).
-              const AppSectionHeader(label: 'APPEARANCE'),
-              const AppCard(
-                child: _AppearanceSection(),
-              ),
-              SizedBox(height: spacing.xl),
-
-              // 3. NOTIFICATIONS — three preference toggles (task 8.8).
-              const AppSectionHeader(label: 'NOTIFICATIONS'),
-              const AppCard(
-                child: _NotificationsSection(),
-              ),
-              SizedBox(height: spacing.xl),
-
-              // 4. PRIVACY & SECURITY — list tiles (task 8.10).
-              const AppSectionHeader(label: 'PRIVACY & SECURITY'),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: _PrivacySecuritySection(onAction: _showComingSoon),
-              ),
-              SizedBox(height: spacing.xl),
-
-              // 5. DATA & STORAGE — list tiles (task 8.10).
-              const AppSectionHeader(label: 'DATA & STORAGE'),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: _DataStorageSection(onAction: _showComingSoon),
-              ),
-              SizedBox(height: spacing.xl),
-
-              // 6. PREFERENCES — list tiles (task 8.10).
-              const AppSectionHeader(label: 'PREFERENCES'),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: _PreferencesSection(onAction: _showComingSoon),
-              ),
-              SizedBox(height: spacing.xl),
-
-              // 7. ABOUT & SUPPORT — list tiles (task 8.10).
-              const AppSectionHeader(label: 'ABOUT & SUPPORT'),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: _AboutSupportSection(onAction: _showComingSoon),
-              ),
-              SizedBox(height: spacing.xxl),
-
-              // 8. Sign Out — full functionality wired in task 8.11.
-              AppSecondaryButton(
-                label: 'Sign Out',
-                icon: Icons.logout_rounded,
-                fullWidth: true,
-                onPressed: _onSignOutPressed,
-              ),
-              SizedBox(height: spacing.xxl),
-            ],
+            ),
           );
         },
       ),
-    ),);
+    );
   }
 
   /// Clears the display-name validation error as soon as the user
@@ -522,7 +531,6 @@ class _ProfileSection extends StatelessWidget {
   final InFlightGate saveGate;
   final String? nameError;
   final String? phoneError;
-  final Future<void> Function() onSavePressed;
   final ValueChanged<String> onNameChanged;
   final ValueChanged<String> onPhoneChanged;
   final VoidCallback onChangeAvatarPressed;
@@ -533,7 +541,6 @@ class _ProfileSection extends StatelessWidget {
     required this.saveGate,
     required this.nameError,
     required this.phoneError,
-    required this.onSavePressed,
     required this.onNameChanged,
     required this.onPhoneChanged,
     required this.onChangeAvatarPressed,
@@ -621,6 +628,7 @@ class _ProfileSection extends StatelessWidget {
                   errorText: nameError,
                   enabled: !saveGate.isRunning,
                   onChanged: onNameChanged,
+                  textCapitalization: TextCapitalization.words,
                 );
               },
             ),
@@ -650,23 +658,7 @@ class _ProfileSection extends StatelessWidget {
                 );
               },
             ),
-            SizedBox(height: spacing.xl),
 
-            // Save Profile — full-width gradient pill. The button's
-            // `isLoading` slot mirrors the in-flight gate so the
-            // spinner appears for the duration of the
-            // `ProfileService.updateProfile` call.
-            ListenableBuilder(
-              listenable: saveGate,
-              builder: (BuildContext context, Widget? _) {
-                return AppGradientButton(
-                  label: 'Save Profile',
-                  icon: Icons.check_rounded,
-                  isLoading: saveGate.isRunning,
-                  onPressed: onSavePressed,
-                );
-              },
-            ),
           ],
         );
       },
@@ -1075,6 +1067,15 @@ class _AppearanceSection extends StatelessWidget {
             ),
           ],
         ),
+        SizedBox(height: spacing.sm),
+        Text(
+          'Choose your accent color',
+          style: typography.body.copyWith(
+            color: colors.foreground.withValues(
+              alpha: colors.surfaceProminent + 0.4,
+            ),
+          ),
+        ),
         SizedBox(height: spacing.lg),
 
         // 4-column gradient swatch grid. `shrinkWrap` + the inner
@@ -1165,6 +1166,9 @@ class _SwatchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+
     // Derive a coherent four-stop gradient palette from the seed so
     // the swatch previews the same brand-gradient treatment used by
     // `AppPrimaryButton` and friends once the preset is applied.
@@ -1180,6 +1184,12 @@ class _SwatchTile extends StatelessWidget {
       height: diameter,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
+        border: Border.all(
+          color: selected
+              ? colors.foreground
+              : colors.foreground.withValues(alpha: 0.15),
+          width: selected ? 2.0 : 1.0,
+        ),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,

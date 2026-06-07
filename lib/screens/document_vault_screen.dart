@@ -30,6 +30,7 @@ import '../core/util/single_select_controller.dart';
 import '../services/vehicle_insights.dart';
 import '../widgets/ui/ui.dart';
 import 'document_vault/_widgets.dart';
+import 'document_viewer_screen.dart';
 
 class DocumentVaultScreen extends StatefulWidget {
   const DocumentVaultScreen({
@@ -68,6 +69,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   late final SingleSelectController<String> _categoryController;
   late final VaultDocumentStore _store;
   VaultViewMode _viewMode = VaultViewMode.list;
+  String? _uploadWarning;
 
   @override
   void initState() {
@@ -97,14 +99,18 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   DateTime _resolveNow() => (widget.now ?? DateTime.now)();
 
   Future<void> _showAddDocumentSheet() async {
-    await AppBottomSheet.show<bool>(
+    final dynamic result = await AppBottomSheet.show<dynamic>(
       context,
       initialHeightFraction: 0.9,
       builder: (BuildContext sheetContext) =>
           AddVaultDocumentSheet(store: _store),
     );
-    // The sheet closes itself on success; the screen rebuilds on the
-    // next [VehicleInsights] notification.
+    // result == true  → success, no warning.
+    // result is String → success but file upload failed; show warning banner.
+    if (result is String && mounted) {
+      setState(() => _uploadWarning = result);
+    }
+    // The screen rebuilds on the next [VehicleInsights] notification.
   }
 
   List<VaultDocument> _resolveDocuments(List<VaultDocument>? overridden) {
@@ -160,6 +166,16 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        if (_uploadWarning != null)
+          Padding(
+            padding: EdgeInsets.fromLTRB(spacing.lg, spacing.md, spacing.lg, 0),
+            child: AppFeedbackBanner(
+              key: const ValueKey<String>('vault_upload_warning_banner'),
+              kind: FeedbackKind.warning,
+              message: _uploadWarning!,
+              onDismiss: () => setState(() => _uploadWarning = null),
+            ),
+          ),
         Padding(
           padding: EdgeInsets.fromLTRB(
             spacing.lg,
@@ -241,6 +257,11 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
           document: docs[index],
           now: now,
           isGrid: false,
+          onTap: () => Navigator.pushNamed(
+            context,
+            DocumentViewerScreen.routeName,
+            arguments: docs[index],
+          ),
         );
       },
     );
@@ -264,6 +285,11 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
           document: docs[index],
           now: now,
           isGrid: true,
+          onTap: () => Navigator.pushNamed(
+            context,
+            DocumentViewerScreen.routeName,
+            arguments: docs[index],
+          ),
         );
       },
     );

@@ -87,6 +87,10 @@ class AppTextField extends StatelessWidget {
   /// `MaxLengthEnforcement.enforced`.
   final int? maxLength;
 
+  /// Optional text capitalization passed to the underlying `TextField`.
+  /// Defaults to `TextCapitalization.none`.
+  final TextCapitalization textCapitalization;
+
   const AppTextField({
     super.key,
     required this.controller,
@@ -102,6 +106,7 @@ class AppTextField extends StatelessWidget {
     this.onChanged,
     this.focusNode,
     this.maxLength,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -127,6 +132,7 @@ class AppTextField extends StatelessWidget {
       enabled: enabled,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
       inputFormatters: inputFormatters,
       onChanged: onChanged,
       maxLength: maxLength,

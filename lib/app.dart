@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/tokens/app_colors.dart';
 import 'screens/booking_screen.dart';
+import 'screens/document_vault/_widgets.dart';
 import 'screens/document_vault_screen.dart';
+import 'screens/document_viewer_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/maintenance_screen.dart';
@@ -105,6 +107,11 @@ class _DriveCarePlusAppState extends State<DriveCarePlusApp> {
             RefuelLogScreen.routeName: (_) => const RefuelLogScreen(),
             WorkshopMapScreen.routeName: (_) => const WorkshopMapScreen(),
             DocumentVaultScreen.routeName: (_) => const DocumentVaultScreen(),
+            DocumentViewerScreen.routeName: (context) {
+              final VaultDocument document =
+                  ModalRoute.of(context)!.settings.arguments as VaultDocument;
+              return DocumentViewerScreen(document: document);
+            },
             NotificationsScreen.routeName: (_) => const NotificationsScreen(),
             SettingsScreen.routeName: (_) => const SettingsScreen(),
             WalletHistoryScreen.routeName: (_) => const WalletHistoryScreen(),

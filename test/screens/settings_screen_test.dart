@@ -398,10 +398,8 @@ void main() {
         await tester.enterText(nameFieldFinder, '');
         await tester.pump();
 
-        // Scroll the Save Profile button into view (the screen is
-        // long), then tap it.
-        await tester.ensureVisible(find.byType(AppGradientButton));
-        await tester.tap(find.byType(AppGradientButton));
+        // Tap the Save button in the AppBar actions.
+        await tester.tap(find.text('Save'));
         await tester.pump();
 
         // The name field must now expose a non-null errorText. The
@@ -430,8 +428,8 @@ void main() {
         await tester.enterText(phoneFieldFinder, '123456');
         await tester.pump();
 
-        await tester.ensureVisible(find.byType(AppGradientButton));
-        await tester.tap(find.byType(AppGradientButton));
+        // Tap the Save button in the AppBar actions.
+        await tester.tap(find.text('Save'));
         await tester.pump();
 
         final AppTextField phoneField = tester.widget<AppTextField>(
