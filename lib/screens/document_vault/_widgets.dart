@@ -53,11 +53,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import '../../services/api_tracker_service.dart';
 
 import '../../core/theme/tokens/tokens.dart';
 import '../../core/util/expiry.dart';
 import '../../core/util/format_bytes.dart';
 import '../../services/vehicle_insights.dart';
+import '../../services/profile_service.dart';
 import '../../widgets/ui/ui.dart';
 
 // ===========================================================================
@@ -318,6 +320,7 @@ class VehicleInsightsVaultDocumentStore implements VaultDocumentStore {
       if (uploadWarning != null) throw VaultUploadWarning(uploadWarning);
       return;
     }
+    ApiTracker.instance.trackCall('Cloud Firestore');
     await firestore
         .collection('users')
         .doc(user.uid)
@@ -683,6 +686,33 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
           return;
         }
 
+        final bool isPro = ProfileService.instance.isPro;
+        final int limitBytes = isPro ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+
+        final List<VaultDocument> documents = VehicleInsights.instance.documents
+            .map<VaultDocument>((Map<String, dynamic> raw) => VaultDocument.fromMap(raw))
+            .toList();
+
+        int currentTotalBytes = 0;
+        for (final VaultDocument d in documents) {
+          if (widget.initial != null &&
+              d.title == widget.initial!.title &&
+              d.category == widget.initial!.category) {
+            continue;
+          }
+          currentTotalBytes += d.fileSizeBytes ?? 0;
+        }
+
+        final int totalBytes = currentTotalBytes + pickedFile.size;
+        if (totalBytes > limitBytes) {
+          setState(() {
+            _persistenceError = isPro
+                ? 'Vault storage limit exceeded. Pro plan limit is 50MB.'
+                : 'Vault storage limit exceeded. Upgrade to Pro for 50MB storage.';
+          });
+          return;
+        }
+
         setState(() {
           _pickedFilePath = pickedFile.path;
           _pickedFileName = pickedFile.name;
@@ -733,6 +763,35 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
       // Validation failure → keep sheet open, retain values, banner.
       setState(() {
         _persistenceError = errors.title ?? errors.category;
+      });
+      return;
+    }
+
+    final bool isPro = ProfileService.instance.isPro;
+    final int limitBytes = isPro ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+
+    final List<VaultDocument> documents = VehicleInsights.instance.documents
+        .map<VaultDocument>((Map<String, dynamic> raw) => VaultDocument.fromMap(raw))
+        .toList();
+
+    int currentTotalBytes = 0;
+    for (final VaultDocument d in documents) {
+      if (widget.initial != null &&
+          d.title == widget.initial!.title &&
+          d.category == widget.initial!.category) {
+        continue;
+      }
+      currentTotalBytes += d.fileSizeBytes ?? 0;
+    }
+
+    final int newFileSize = _pickedFileSize ?? widget.initial?.fileSizeBytes ?? 0;
+    final int totalBytes = currentTotalBytes + newFileSize;
+
+    if (totalBytes > limitBytes) {
+      setState(() {
+        _persistenceError = isPro
+            ? 'Vault storage limit exceeded. Pro plan limit is 50MB.'
+            : 'Vault storage limit exceeded. Upgrade to Pro for 50MB storage.';
       });
       return;
     }

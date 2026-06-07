@@ -31,6 +31,7 @@ import 'package:intl/intl.dart';
 
 import '../core/theme/tokens/tokens.dart';
 import '../services/journey_database.dart';
+import '../services/profile_service.dart';
 import '../widgets/pending_journey_card.dart';
 import '../widgets/ui/ui.dart';
 
@@ -234,6 +235,17 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
                       ),
                     ),
                     SizedBox(height: spacing.lg),
+                    if (!ProfileService.instance.isPro) ...[
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: spacing.xl),
+                        child: const AppFeedbackBanner(
+                          kind: FeedbackKind.info,
+                          message:
+                              'Basic plan stores journey logs for 30 days. Upgrade to Pro for lifetime tracking history.',
+                        ),
+                      ),
+                      SizedBox(height: spacing.md),
+                    ],
                     Expanded(
                       child: _isLoading
                           ? const Center(child: AppSpinner())

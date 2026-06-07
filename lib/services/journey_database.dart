@@ -1,5 +1,6 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'profile_service.dart';
 
 class JourneyDatabase {
   static final JourneyDatabase instance = JourneyDatabase._init();
@@ -123,6 +124,12 @@ CREATE TABLE journey_points (
 
   Future<List<Map<String, dynamic>>> getJourneys() async {
     final db = await instance.database;
+    if (!ProfileService.instance.isPro) {
+      await db.delete(
+        'journeys',
+        where: "start_time < datetime('now', '-30 days')",
+      );
+    }
     return await db.query('journeys', orderBy: 'start_time DESC');
   }
 

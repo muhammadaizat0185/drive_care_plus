@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'glass_container.dart';
+import '../services/api_tracker_service.dart';
 
 class CloudSyncQuotaCard extends StatefulWidget {
   const CloudSyncQuotaCard({super.key});
@@ -35,6 +36,7 @@ class _CloudSyncQuotaCardState extends State<CloudSyncQuotaCard> {
 
     try {
       // Pull refuel log size count
+      ApiTracker.instance.trackCall('Cloud Firestore');
       final refuelQuery = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -42,6 +44,7 @@ class _CloudSyncQuotaCardState extends State<CloudSyncQuotaCard> {
           .get();
 
       // Pull document vault size count
+      ApiTracker.instance.trackCall('Cloud Firestore');
       final vaultQuery = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -49,6 +52,7 @@ class _CloudSyncQuotaCardState extends State<CloudSyncQuotaCard> {
           .get();
 
       // Read bookings collection count
+      ApiTracker.instance.trackCall('Cloud Firestore');
       final bookingQuery = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)

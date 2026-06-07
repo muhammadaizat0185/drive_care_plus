@@ -22,8 +22,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../core/theme/color_utils.dart';
 
 import '../core/theme/tokens/tokens.dart';
+import '../services/profile_service.dart';
 import '../services/vehicle_insights.dart';
 import '../widgets/ui/ui.dart';
+import 'home_screen.dart';
 
 class VehicleCustomizerScreen extends StatefulWidget {
   const VehicleCustomizerScreen({super.key});
@@ -47,6 +49,7 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
     'coupe',
     'compact',
     'cabriolet',
+    'exoraGold',
   ];
 
   late String _selectedType;
@@ -119,7 +122,9 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
               child: Column(
                 children: <Widget>[
                   SvgPicture.asset(
-                    'assets/images/cars/Car Vector/SVG/${_selectedType}_front.svg',
+                    _selectedType == 'exoraGold'
+                        ? 'assets/images/cars/Premium/exoraGold_front.svg'
+                        : 'assets/images/cars/Car Vector/SVG/${_selectedType}_front.svg',
                     height: 180,
                   ),
                   SizedBox(height: spacing.md),
@@ -159,9 +164,21 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
               children: <Widget>[
                 for (final String type in _carTypes)
                   AppCategoryChip(
-                    label: type[0].toUpperCase() + type.substring(1),
+                    label: type == 'exoraGold'
+                        ? 'Exora Gold${ProfileService.instance.isPro ? '' : ' 🔒'}'
+                        : type[0].toUpperCase() + type.substring(1),
                     selected: _selectedType == type,
-                    onTap: () => setState(() => _selectedType = type),
+                    onTap: () {
+                      if (type == 'exoraGold' && !ProfileService.instance.isPro) {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (context) => const ProSubscriptionSheet(),
+                        );
+                      } else {
+                        setState(() => _selectedType = type);
+                      }
+                    },
                   ),
               ],
             ),
