@@ -33,9 +33,27 @@ class CarHealthOverlay extends StatelessWidget {
       children: [
         // The Side View Car SVG
         SvgPicture.asset(
-          carType == 'exoraGold'
-              ? 'assets/images/cars/Premium/exoraGold_left_side.svg'
-              : 'assets/images/cars/Car Vector/SVG/${carType}_left_side.svg',
+          () {
+            const premiumTypes = <String>{
+              'exoraGold',
+              'axiaBlue',
+              'axiaRed',
+              'axiaWhite',
+              'exoraBrown',
+              'myviBlack',
+              'myviBlue',
+              'myviRed',
+              'myviWhite',
+              'sagaBlack',
+              'sagaRed',
+              'sagaSilver',
+            };
+            if (premiumTypes.contains(carType)) {
+              final String actualName = carType == 'axiaRed' ? 'axieRed' : carType;
+              return 'assets/images/cars/Premium/${actualName}_left_side.svg';
+            }
+            return 'assets/images/cars/Car Vector/SVG/${carType}_left_side.svg';
+          }(),
           height: 140,
         ),
         

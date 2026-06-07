@@ -23,6 +23,13 @@ class ProfileService extends ChangeNotifier {
   String get photoUrl => _photoUrl;
   String get phone => _phone;
   String get bio => _bio;
+  String get email {
+    try {
+      return FirebaseAuth.instance.currentUser?.email ?? 'driver@drivecareplus.com';
+    } catch (_) {
+      return 'driver@drivecareplus.com';
+    }
+  }
   double get walletBalance => _walletBalance;
   List<Map<String, dynamic>> get transactions => _transactions;
   bool get isPro => _isPro;
@@ -195,6 +202,10 @@ class ProfileService extends ChangeNotifier {
     _photoUrl = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
     _phone = '+60 12-345 6789';
     _bio = 'Daily Commuter 🚗';
+    _walletBalance = 0.0;
+    _transactions = [];
+    _isPro = false;
+    _subscriptionExpiry = null;
     notifyListeners();
 
     try {

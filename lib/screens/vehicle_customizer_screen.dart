@@ -50,7 +50,33 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
     'compact',
     'cabriolet',
     'exoraGold',
+    'axiaBlue',
+    'axiaRed',
+    'axiaWhite',
+    'exoraBrown',
+    'myviBlack',
+    'myviBlue',
+    'myviRed',
+    'myviWhite',
+    'sagaBlack',
+    'sagaRed',
+    'sagaSilver',
   ];
+
+  static const Set<String> _premiumTypes = <String>{
+    'exoraGold',
+    'axiaBlue',
+    'axiaRed',
+    'axiaWhite',
+    'exoraBrown',
+    'myviBlack',
+    'myviBlue',
+    'myviRed',
+    'myviWhite',
+    'sagaBlack',
+    'sagaRed',
+    'sagaSilver',
+  };
 
   late String _selectedType;
 
@@ -84,6 +110,23 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
       if (!mounted) return;
       setState(() => _saveError = 'Could not save vehicle style: $e');
     }
+  }
+
+  String _formatCarType(String type) {
+    if (_premiumTypes.contains(type)) {
+      final RegExp matchCamelCase = RegExp(r'(^[a-z]+|[A-Z][a-z]*)');
+      final List<String> matches = matchCamelCase
+          .allMatches(type)
+          .map((m) => m.group(0)!)
+          .toList();
+      if (matches.isNotEmpty) {
+        final String capitalized = matches
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+        return capitalized + (ProfileService.instance.isPro ? '' : ' 🔒');
+      }
+    }
+    return type[0].toUpperCase() + type.substring(1);
   }
 
   @override
@@ -122,8 +165,8 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
               child: Column(
                 children: <Widget>[
                   SvgPicture.asset(
-                    _selectedType == 'exoraGold'
-                        ? 'assets/images/cars/Premium/exoraGold_front.svg'
+                    _premiumTypes.contains(_selectedType)
+                        ? 'assets/images/cars/Premium/${_selectedType}_front.svg'
                         : 'assets/images/cars/Car Vector/SVG/${_selectedType}_front.svg',
                     height: 180,
                   ),
@@ -164,12 +207,10 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
               children: <Widget>[
                 for (final String type in _carTypes)
                   AppCategoryChip(
-                    label: type == 'exoraGold'
-                        ? 'Exora Gold${ProfileService.instance.isPro ? '' : ' 🔒'}'
-                        : type[0].toUpperCase() + type.substring(1),
+                    label: _formatCarType(type),
                     selected: _selectedType == type,
                     onTap: () {
-                      if (type == 'exoraGold' && !ProfileService.instance.isPro) {
+                      if (_premiumTypes.contains(type) && !ProfileService.instance.isPro) {
                         showModalBottomSheet(
                           context: context,
                           isScrollControlled: true,

@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +12,7 @@ import '../core/util/in_flight_gate.dart';
 import '../services/notification_preferences.dart';
 import '../services/profile_service.dart';
 import '../services/theme_service.dart';
+import '../services/auth_cleanup_service.dart';
 import '../widgets/ui/ui.dart';
 import 'cloud_sync_quota_screen.dart';
 import 'home_screen.dart';
@@ -63,6 +67,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // [ProfileService] snapshot and disposed in [dispose].
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _emailController;
+  String? _tempPhotoUrl;
 
   /// Per-screen in-flight guard for the `Save Profile` gesture. Drops
   /// re-entrant taps while a previous [ProfileService.updateProfile]
@@ -114,7 +120,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool get _isDirty {
     final ProfileService profile = ProfileService.instance;
     return _nameController.text != profile.displayName ||
-        _phoneController.text != profile.phone;
+        _phoneController.text != profile.phone ||
+        _tempPhotoUrl != profile.photoUrl;
   }
 
   @override
@@ -123,12 +130,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ProfileService profile = ProfileService.instance;
     _nameController = TextEditingController(text: profile.displayName);
     _phoneController = TextEditingController(text: profile.phone);
+    _emailController = TextEditingController(text: profile.email);
+    _tempPhotoUrl = profile.photoUrl;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
     _saveGate.dispose();
     super.dispose();
   }
@@ -220,6 +230,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: _ProfileSection(
                     nameController: _nameController,
                     phoneController: _phoneController,
+                    emailController: _emailController,
+                    tempPhotoUrl: _tempPhotoUrl ?? ProfileService.instance.photoUrl,
                     saveGate: _saveGate,
                     nameError: _nameError,
                     phoneError: _phoneError,
@@ -310,17 +322,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Handler wired to the camera `AppIconButton` overlaying the
-  /// avatar in the `PROFILE` section. Avatar selection is not yet
-  /// implemented, so the handler surfaces a placeholder snackbar
-  /// per the task spec; the underlying avatar-picker flow lands in
-  /// a follow-up.
-  void _onChangeAvatarPressed() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(content: Text('Change avatar — coming soon')),
-      );
+  Future<void> _onChangeAvatarPressed() async {
+    final String? selectedUrl = await AppBottomSheet.show<String>(
+      context,
+      initialHeightFraction: 0.60,
+      builder: (BuildContext sheetContext) {
+        final ThemeData theme = Theme.of(sheetContext);
+        final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+        final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+        final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Change Profile Photo',
+              style: typography.title.copyWith(color: colors.foreground),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: spacing.lg),
+            // Custom upload button
+            AppGradientButton(
+              label: 'Upload Custom Photo',
+              icon: Icons.upload_file,
+              onPressed: () async {
+                try {
+                  final FilePickerResult? result = await FilePicker.platform.pickFiles(
+                    type: FileType.image,
+                  );
+                  if (result != null && result.files.single.path != null) {
+                    final String localPath = result.files.single.path!;
+                    Navigator.of(sheetContext).pop(localPath);
+                  }
+                } catch (e) {
+                  debugPrint('Error picking profile image: $e');
+                }
+              },
+            ),
+            SizedBox(height: spacing.lg),
+            Text(
+              'Or choose a preset:',
+              style: typography.bodyLarge.copyWith(
+                color: colors.foreground.withValues(alpha: colors.surfaceProminent),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: spacing.sm),
+            // Grid of preset avatars
+            SizedBox(
+              height: 60,
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: ProfileService.presetAvatars.length,
+                itemBuilder: (BuildContext ctx, int index) {
+                  final String url = ProfileService.presetAvatars[index];
+                  return GestureDetector(
+                    onTap: () => Navigator.of(sheetContext).pop(url),
+                    child: CircleAvatar(
+                      backgroundImage: NetworkImage(url),
+                      backgroundColor: colors.muted,
+                    ),
+                  );
+                },
+              ),
+            ),
+            SizedBox(height: spacing.md),
+            AppSecondaryButton(
+              label: 'Cancel',
+              fullWidth: true,
+              onPressed: () => Navigator.of(sheetContext).pop(null),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selectedUrl != null) {
+      setState(() {
+        _tempPhotoUrl = selectedUrl;
+      });
+    }
   }
 
   /// Handler wired to the `Save Profile` [AppGradientButton] in the
@@ -375,12 +463,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // the user can retry once they've adjusted their input.
     try {
       await _saveGate.run<void>(() async {
+        String finalAvatarUrl = _tempPhotoUrl ?? profile.photoUrl;
+        if (finalAvatarUrl.isNotEmpty &&
+            !finalAvatarUrl.startsWith('http://') &&
+            !finalAvatarUrl.startsWith('https://')) {
+          try {
+            final File file = File(finalAvatarUrl);
+            if (await file.exists()) {
+              final User? user = FirebaseAuth.instance.currentUser;
+              final String uid = user?.uid ?? 'anonymous';
+              final String fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+              final Reference ref = FirebaseStorage.instance
+                  .ref()
+                  .child('users')
+                  .child(uid)
+                  .child('profile')
+                  .child(fileName);
+              final UploadTask uploadTask = ref.putFile(file);
+              final TaskSnapshot snapshot = await uploadTask;
+              finalAvatarUrl = await snapshot.ref.getDownloadURL();
+            }
+          } catch (e) {
+            debugPrint('Error uploading profile picture to Firebase Storage: $e');
+          }
+        }
+
         await profile.updateProfile(
           name: name,
-          avatarUrl: profile.photoUrl,
+          avatarUrl: finalAvatarUrl,
           phoneNo: phone,
           userBio: profile.bio,
         );
+
+        setState(() {
+          _tempPhotoUrl = finalAvatarUrl;
+        });
       });
     } catch (_) {
       if (!mounted) return;
@@ -489,6 +606,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       await FirebaseAuth.instance.signOut();
+      await AuthCleanupService.clearAllData();
     } catch (_) {
       // Sign-out failures are rare in practice (the call resolves
       // locally and is non-blocking on the backend) but if one
@@ -538,6 +656,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _ProfileSection extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController phoneController;
+  final TextEditingController emailController;
+  final String tempPhotoUrl;
   final InFlightGate saveGate;
   final String? nameError;
   final String? phoneError;
@@ -548,6 +668,8 @@ class _ProfileSection extends StatelessWidget {
   const _ProfileSection({
     required this.nameController,
     required this.phoneController,
+    required this.emailController,
+    required this.tempPhotoUrl,
     required this.saveGate,
     required this.nameError,
     required this.phoneError,
@@ -587,7 +709,14 @@ class _ProfileSection extends StatelessWidget {
                   children: <Widget>[
                     CircleAvatar(
                       radius: _avatarDiameter / 2,
-                      backgroundImage: NetworkImage(profile.photoUrl),
+                      backgroundImage: () {
+                        final String url = tempPhotoUrl.isNotEmpty ? tempPhotoUrl : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
+                        if (url.startsWith('http://') || url.startsWith('https://')) {
+                          return NetworkImage(url);
+                        } else {
+                          return FileImage(File(url)) as ImageProvider;
+                        }
+                      }(),
                       backgroundColor: colors.muted,
                     ),
                     // Camera overlay anchored to the bottom-right. The
@@ -641,6 +770,15 @@ class _ProfileSection extends StatelessWidget {
                   textCapitalization: TextCapitalization.words,
                 );
               },
+            ),
+            SizedBox(height: spacing.lg),
+
+            // Email address (read-only/disabled)
+            AppTextField(
+              controller: emailController,
+              label: 'Email address',
+              prefixIcon: Icons.email_outlined,
+              enabled: false,
             ),
             SizedBox(height: spacing.lg),
 
