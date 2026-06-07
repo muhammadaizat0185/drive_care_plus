@@ -47,8 +47,11 @@
 // `Theme.of(context)`; no hex colors, spacing, radii, or typography
 // literals from the Token_Sets are inlined (Requirement 3.11).
 
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens/tokens.dart';
@@ -91,12 +94,16 @@ class VaultDocument {
   /// file-size row in that case.
   final int? fileSizeBytes;
 
+  /// Optional URL of the uploaded file on Firebase Storage (e.g. download URL).
+  final String? fileUrl;
+
   const VaultDocument({
     required this.title,
     required this.category,
     this.note = '',
     this.expiryDate,
     this.fileSizeBytes,
+    this.fileUrl,
   });
 
   /// Parse a `Map<String, dynamic>` produced by the legacy
@@ -114,6 +121,7 @@ class VaultDocument {
       }(),
       expiryDate: _parseLegacyDate(map['expiryDate'] as String? ?? ''),
       fileSizeBytes: (map['fileSizeBytes'] as num?)?.toInt(),
+      fileUrl: map['fileUrl'] as String?,
     );
   }
 
@@ -129,6 +137,7 @@ class VaultDocument {
           ? ''
           : '${expiryDate!.day}/${expiryDate!.month}/${expiryDate!.year}',
       if (fileSizeBytes != null) 'fileSizeBytes': fileSizeBytes,
+      if (fileUrl != null) 'fileUrl': fileUrl,
     };
   }
 
@@ -157,17 +166,18 @@ class VaultDocument {
         other.category == category &&
         other.note == note &&
         other.expiryDate == expiryDate &&
-        other.fileSizeBytes == fileSizeBytes;
+        other.fileSizeBytes == fileSizeBytes &&
+        other.fileUrl == fileUrl;
   }
 
   @override
   int get hashCode =>
-      Object.hash(title, category, note, expiryDate, fileSizeBytes);
+      Object.hash(title, category, note, expiryDate, fileSizeBytes, fileUrl);
 
   @override
   String toString() =>
       'VaultDocument(title: "$title", category: "$category", '
-      'expiryDate: $expiryDate, fileSizeBytes: $fileSizeBytes)';
+      'expiryDate: $expiryDate, fileSizeBytes: $fileSizeBytes, fileUrl: $fileUrl)';
 }
 
 // ===========================================================================
@@ -199,16 +209,29 @@ const List<String> kVaultEditableCategories = <String>[
 // VaultDocumentStore
 // ===========================================================================
 
+/// Thrown by [VaultDocumentStore.save] when the file upload to Firebase
+/// Storage fails but the document metadata was still saved locally.
+/// The caller should close the sheet (success path) and surface the
+/// message as a warning rather than an error.
+class VaultUploadWarning implements Exception {
+  final String message;
+  const VaultUploadWarning(this.message);
+  @override
+  String toString() => 'VaultUploadWarning: $message';
+}
+
 /// Persistence boundary for vault documents. The screen depends on
 /// this abstraction (instead of `VehicleInsights` and Firestore
 /// directly) so widget tests can inject an in-memory binding without
 /// dragging Firebase into the flutter_test process.
 abstract class VaultDocumentStore {
-  /// Persist [doc] to the underlying store.
+  /// Persist [doc] to the underlying store. Optionally uploads the file at
+  /// [localFilePath] to Firebase Storage and returns/updates the document with
+  /// the uploaded URL.
   ///
-  /// Throws when persistence fails so callers can branch into the
-  /// error banner path required by Requirement 10.7.
-  Future<void> save(VaultDocument doc);
+  /// Throws [VaultUploadWarning] when metadata is saved but the file upload
+  /// failed. Throws other exceptions when persistence fails entirely.
+  Future<void> save(VaultDocument doc, {String? localFilePath});
 }
 
 /// Production binding that persists each document through both
@@ -216,28 +239,75 @@ abstract class VaultDocumentStore {
 /// SharedPreferences) and the legacy
 /// `users/{uid}/documents` Firestore collection. Keeps the call shape
 /// of the pre-redesign add flow intact (Requirement 10.6) while
-/// surfacing any Firestore failure to the caller through a thrown
+/// surfacing any Firestore/Storage failure to the caller through a thrown
 /// exception so the error banner can render.
 class VehicleInsightsVaultDocumentStore implements VaultDocumentStore {
-  /// Optional explicit auth + firestore handles for tests; in
+  /// Optional explicit auth + firestore + storage handles for tests; in
   /// production both default to the singleton instances.
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
+  final FirebaseStorage storage;
   final VehicleInsights insights;
 
   VehicleInsightsVaultDocumentStore({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
+    FirebaseStorage? storage,
     VehicleInsights? insights,
   })  : auth = auth ?? FirebaseAuth.instance,
         firestore = firestore ?? FirebaseFirestore.instance,
+        storage = storage ?? FirebaseStorage.instance,
         insights = insights ?? VehicleInsights.instance;
 
   @override
-  Future<void> save(VaultDocument doc) async {
+  Future<void> save(VaultDocument doc, {String? localFilePath}) async {
+    String? finalUrl = doc.fileUrl;
+    // Tracks whether the file upload failed so the caller can show a warning
+    // without blocking the metadata save.
+    String? uploadWarning;
+
+    if (localFilePath != null) {
+      final File file = File(localFilePath);
+      if (await file.exists()) {
+        final User? user = auth.currentUser;
+        final String uid = user?.uid ?? 'anonymous';
+        final String fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_${doc.title.replaceAll(RegExp(r'\s+'), '_')}';
+        final Reference ref = storage
+            .ref()
+            .child('users')
+            .child(uid)
+            .child('documents')
+            .child(fileName);
+
+        try {
+          // Upload file to Firebase Storage
+          final UploadTask uploadTask = ref.putFile(file);
+          final TaskSnapshot snapshot = await uploadTask;
+          finalUrl = await snapshot.ref.getDownloadURL();
+        } catch (uploadError) {
+          // Storage upload failed (e.g. rules not configured, no internet).
+          // Record the warning but continue — metadata is still saved locally.
+          uploadWarning =
+              'File could not be uploaded to cloud storage. '
+              'Document was saved without the attachment.\n'
+              'Check Firebase Storage rules and try re-attaching the file.';
+        }
+      }
+    }
+
+    final VaultDocument docToSave = VaultDocument(
+      title: doc.title,
+      category: doc.category,
+      note: doc.note,
+      expiryDate: doc.expiryDate,
+      fileSizeBytes: doc.fileSizeBytes,
+      fileUrl: finalUrl,
+    );
+
     // 1. Persist to the existing `VehicleInsights` store so the
     //    document appears in the local list immediately.
-    await insights.addDocument(doc.toMap());
+    await insights.addDocument(docToSave.toMap());
 
     // 2. Mirror to Firestore at `users/{uid}/documents` exactly as
     //    the pre-redesign code did, so cloud sync is preserved.
@@ -245,6 +315,7 @@ class VehicleInsightsVaultDocumentStore implements VaultDocumentStore {
     if (user == null) {
       // No signed-in user → local persistence is enough; not a
       // failure for the redesigned screen.
+      if (uploadWarning != null) throw VaultUploadWarning(uploadWarning);
       return;
     }
     await firestore
@@ -252,14 +323,19 @@ class VehicleInsightsVaultDocumentStore implements VaultDocumentStore {
         .doc(user.uid)
         .collection('documents')
         .add(<String, Object?>{
-      'title': doc.title,
-      'category': doc.category,
-      'note': doc.note,
-      'expiryDate': doc.expiryDate == null
+      'title': docToSave.title,
+      'category': docToSave.category,
+      'note': docToSave.note,
+      'expiryDate': docToSave.expiryDate == null
           ? ''
-          : '${doc.expiryDate!.day}/${doc.expiryDate!.month}/${doc.expiryDate!.year}',
+          : '${docToSave.expiryDate!.day}/${docToSave.expiryDate!.month}/${docToSave.expiryDate!.year}',
       'timestamp': FieldValue.serverTimestamp(),
+      if (docToSave.fileSizeBytes != null) 'fileSizeBytes': docToSave.fileSizeBytes,
+      if (docToSave.fileUrl != null) 'fileUrl': docToSave.fileUrl,
     });
+
+    // Surface the upload warning after a successful metadata save.
+    if (uploadWarning != null) throw VaultUploadWarning(uploadWarning);
   }
 }
 
@@ -277,12 +353,22 @@ class InMemoryVaultDocumentStore implements VaultDocumentStore {
   bool failNext = false;
 
   @override
-  Future<void> save(VaultDocument doc) async {
+  Future<void> save(VaultDocument doc, {String? localFilePath}) async {
     if (failNext) {
       failNext = false;
       throw StateError('Forced failure for vault widget test.');
     }
-    savedDocuments.add(doc);
+    final docToSave = localFilePath != null
+        ? VaultDocument(
+            title: doc.title,
+            category: doc.category,
+            note: doc.note,
+            expiryDate: doc.expiryDate,
+            fileSizeBytes: doc.fileSizeBytes,
+            fileUrl: 'https://firebasestorage.googleapis.com/v0/b/mock/o/${Uri.encodeComponent(localFilePath)}?alt=media',
+          )
+        : doc;
+    savedDocuments.add(docToSave);
   }
 }
 
@@ -447,6 +533,14 @@ class VaultDocumentCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (document.fileUrl != null) ...[
+                SizedBox(width: spacing.sm),
+                Icon(
+                  Icons.attach_file,
+                  size: 16,
+                  color: colors.emerald500,
+                ),
+              ],
             ],
           ),
           if (sizeText != null) ...<Widget>[
@@ -549,6 +643,11 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
   bool _saving = false;
   String? _persistenceError;
 
+  String? _pickedFilePath;
+  String? _pickedFileName;
+  int? _pickedFileSize;
+  String? _existingFileUrl;
+
   @override
   void initState() {
     super.initState();
@@ -556,6 +655,7 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
     _noteController = TextEditingController(text: widget.initial?.note ?? '');
     _category = widget.initial?.category ?? kVaultEditableCategories.first;
     _expiryDate = widget.initial?.expiryDate;
+    _existingFileUrl = widget.initial?.fileUrl;
   }
 
   @override
@@ -563,6 +663,61 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
     _titleController.dispose();
     _noteController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: <String>['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'txt', 'rtf'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final PlatformFile pickedFile = result.files.single;
+
+        // Enforce 10MB limit
+        if (pickedFile.size > 10 * 1024 * 1024) {
+          setState(() {
+            _persistenceError = 'File exceeds maximum size limit of 10MB.';
+          });
+          return;
+        }
+
+        setState(() {
+          _pickedFilePath = pickedFile.path;
+          _pickedFileName = pickedFile.name;
+          _pickedFileSize = pickedFile.size;
+          _existingFileUrl = null;
+          _persistenceError = null;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _persistenceError = 'Failed to pick file: $e';
+      });
+    }
+  }
+
+  IconData _getAttachmentIcon(String nameOrUrl) {
+    final String extension = nameOrUrl.split('?').first.split('.').last.toLowerCase();
+    if (extension == 'pdf') {
+      return Icons.picture_as_pdf_outlined;
+    } else if (['doc', 'docx', 'txt', 'rtf'].contains(extension)) {
+      return Icons.description_outlined;
+    } else {
+      return Icons.image_outlined;
+    }
+  }
+
+  String _getFileNameFromUrl(String url) {
+    try {
+      final Uri uri = Uri.parse(url);
+      final String path = uri.path;
+      final String decodedPath = Uri.decodeComponent(path);
+      return decodedPath.split('/').last;
+    } catch (_) {
+      return 'Cloud Document';
+    }
   }
 
   Future<void> _onSave() async {
@@ -587,7 +742,8 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
       category: _category!,
       note: _noteController.text.trim(),
       expiryDate: _expiryDate,
-      fileSizeBytes: widget.initial?.fileSizeBytes,
+      fileSizeBytes: _pickedFileSize ?? widget.initial?.fileSizeBytes,
+      fileUrl: _existingFileUrl,
     );
 
     setState(() {
@@ -595,9 +751,15 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
       _persistenceError = null;
     });
     try {
-      await widget.store.save(doc);
+      await widget.store.save(doc, localFilePath: _pickedFilePath);
       if (!mounted) return;
       Navigator.of(context).pop(true);
+    } on VaultUploadWarning catch (w) {
+      // Metadata was saved successfully; only the file upload failed.
+      // Close the sheet so the user sees the new document in the list,
+      // and return the warning message for the parent screen to display.
+      if (!mounted) return;
+      Navigator.of(context).pop(w.message);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -692,6 +854,88 @@ class _AddVaultDocumentSheetState extends State<AddVaultDocumentSheet> {
             prefixIcon: Icons.notes_outlined,
           ),
           SizedBox(height: spacing.md),
+
+          // Attachment Section
+          Text(
+            'Attachment (Image, PDF, Doc)',
+            style: typography.label.copyWith(
+              color: colors.foreground
+                  .withValues(alpha: colors.surfaceProminent),
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+          if (_pickedFileName != null || _existingFileUrl != null)
+            Container(
+              padding: EdgeInsets.all(spacing.md),
+              decoration: BoxDecoration(
+                color: colors.muted,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.foreground.withValues(alpha: 0.1)),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    _getAttachmentIcon(_pickedFileName ?? _existingFileUrl!),
+                    color: colors.emerald500,
+                    size: 28,
+                  ),
+                  SizedBox(width: spacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          _pickedFileName ?? _getFileNameFromUrl(_existingFileUrl!),
+                          style: typography.bodyLarge.copyWith(color: colors.foreground),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (_pickedFileSize != null) ...[
+                          SizedBox(height: spacing.xs),
+                          Text(
+                            formatBytes(_pickedFileSize!),
+                            style: typography.body.copyWith(
+                              color: colors.foreground.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ] else if (_existingFileUrl != null) ...[
+                          SizedBox(height: spacing.xs),
+                          Text(
+                            'Uploaded to Cloud',
+                            style: typography.body.copyWith(
+                              color: colors.emerald500,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  AppIconButton(
+                    icon: Icons.close,
+                    onPressed: () {
+                      setState(() {
+                        _pickedFilePath = null;
+                        _pickedFileName = null;
+                        _pickedFileSize = null;
+                        _existingFileUrl = null;
+                      });
+                    },
+                    semanticsLabel: 'Remove attachment',
+                    color: colors.error,
+                  ),
+                ],
+              ),
+            )
+          else
+            AppSecondaryButton(
+              key: const ValueKey<String>('vault_add_attach_button'),
+              label: 'Attach File',
+              icon: Icons.attach_file,
+              onPressed: _pickFile,
+            ),
+          SizedBox(height: spacing.md),
+
           AppSecondaryButton(
             key: const ValueKey<String>('vault_add_expiry_button'),
             label: expiryLabel,

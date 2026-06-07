@@ -37,19 +37,23 @@ class AppSectionHeader extends StatelessWidget {
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
-    // Muted foreground: foreground softened via the `surfaceProminent`
-    // overlay so the header recedes from primary content. Same treatment
-    // used by the disabled-foreground rules in `AppPrimaryButton` /
-    // `AppIconButton`, keeping the muted-foreground language consistent
-    // across the Component_Library.
+    // Muted foreground: foreground softened to 0.55 opacity to increase
+    // contrast and readability on light gray backgrounds, while still
+    // remaining visually separate from primary content.
     final Color mutedForeground =
-        colors.foreground.withValues(alpha: colors.surfaceProminent);
+        colors.foreground.withValues(alpha: 0.55);
 
-    final TextStyle style =
-        typography.label.copyWith(color: mutedForeground);
+    final TextStyle style = typography.label.copyWith(
+      color: mutedForeground,
+      fontWeight: FontWeight.bold,
+    );
 
     return Padding(
-      padding: EdgeInsets.only(left: spacing.lg, bottom: spacing.sm),
+      padding: EdgeInsets.only(
+        left: spacing.lg,
+        top: spacing.md,
+        bottom: spacing.sm,
+      ),
       child: Text(label.toUpperCase(), style: style),
     );
   }
