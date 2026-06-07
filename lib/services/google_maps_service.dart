@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'api_tracker_service.dart';
 
 class GoogleMapsService {
   static const String _apiKey = 'AIzaSyCbAOi4YqBze7HcVNXHuqVUDp9B9HHNRWE';
 
   // Autocomplete (Places API New)
   static Future<List<dynamic>> getPlacePredictions(String query) async {
+    ApiTracker.instance.trackCall('Google Places API');
     if (query.isEmpty) return [];
     
     final url = Uri.parse('https://places.googleapis.com/v1/places:autocomplete');
@@ -38,6 +40,7 @@ class GoogleMapsService {
 
   // Get Place Details (Lat/Lng) (Places API New)
   static Future<LatLng?> getPlaceCoordinates(String placeId) async {
+    ApiTracker.instance.trackCall('Google Places API');
     final url = Uri.parse('https://places.googleapis.com/v1/places/$placeId');
     final response = await http.get(
       url,
@@ -60,6 +63,7 @@ class GoogleMapsService {
 
   // Get Directions Polyline (Routes API)
   static Future<Map<String, dynamic>?> getDirections(LatLng origin, LatLng destination) async {
+    ApiTracker.instance.trackCall('Google Places API');
     final url = Uri.parse('https://routes.googleapis.com/directions/v2:computeRoutes');
     final response = await http.post(
       url,
@@ -112,6 +116,7 @@ class GoogleMapsService {
 
   // Snap to Roads
   static Future<List<LatLng>> snapToRoads(List<LatLng> path) async {
+    ApiTracker.instance.trackCall('Google Places API');
     if (path.isEmpty) return [];
     
     // The Roads API accepts up to 100 points per request.
@@ -144,6 +149,7 @@ class GoogleMapsService {
 
   // Workshop Discovery (Places API New) - Tier 1: Summary List
   static Future<List<dynamic>> searchNearbyWorkshops(LatLng location, double radiusKm, {List<String>? includedTypes}) async {
+    ApiTracker.instance.trackCall('Google Places API');
     final url = Uri.parse('https://places.googleapis.com/v1/places:searchNearby');
     final response = await http.post(
       url,
@@ -178,6 +184,7 @@ class GoogleMapsService {
 
   // Workshop Details (Places API New) - Tier 2: Deep Detail
   static Future<Map<String, dynamic>?> getWorkshopDetails(String placeId) async {
+    ApiTracker.instance.trackCall('Google Places API');
     final url = Uri.parse('https://places.googleapis.com/v1/places/$placeId');
     final response = await http.get(
       url,

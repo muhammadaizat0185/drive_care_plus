@@ -10,6 +10,8 @@ import '../services/notification_preferences.dart';
 import '../services/profile_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/ui/ui.dart';
+import 'cloud_sync_quota_screen.dart';
+import 'home_screen.dart';
 import 'login_screen.dart';
 
 /// Redesigned Settings screen — section scaffolding (task 8.1) + the
@@ -270,7 +272,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const AppSectionHeader(label: 'ABOUT & SUPPORT'),
                 AppCard(
                   padding: EdgeInsets.zero,
-                  child: _AboutSupportSection(onAction: _showComingSoon),
+                  child: _AboutSupportSection(onAction: _onAboutSupportAction),
                 ),
                 SizedBox(height: spacing.xxl),
 
@@ -385,6 +387,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _saveError = 'Failed to save profile. Please try again.';
       });
+    }
+  }
+
+  void _onAboutSupportAction(String label) {
+    if (label == 'Cloud Sync & API Quota') {
+      Navigator.of(context).pushNamed(CloudSyncQuotaScreen.routeName);
+    } else {
+      _showComingSoon(label);
     }
   }
 
@@ -953,6 +963,12 @@ class _AboutSupportSection extends StatelessWidget {
           subtitle: Text(_appVersion, style: subtitleStyle),
         ),
         AppListTile(
+          leading: Icon(Icons.cloud_sync_outlined, color: iconColor),
+          title: Text('Cloud Sync & API Quota', style: titleStyle),
+          trailing: Icon(Icons.chevron_right, color: iconColor),
+          onTap: () => onAction('Cloud Sync & API Quota'),
+        ),
+        AppListTile(
           leading: Icon(Icons.help_outline, color: iconColor),
           title: Text('Help & Feedback', style: titleStyle),
           trailing: Icon(Icons.chevron_right, color: iconColor),
@@ -1116,6 +1132,15 @@ class _AppearanceSection extends StatelessWidget {
   /// color — surfaces visibly via a snackbar instead of failing
   /// silently or throwing into the framework's error reporter.
   Future<void> _onSwatchTap(BuildContext context, Color color) async {
+    final bool isGreen = color.value == 0xFF1B8A5A || color.value == 0xFF10B981;
+    if (!ProfileService.instance.isPro && !isGreen) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => const ProSubscriptionSheet(),
+      );
+      return;
+    }
     try {
       await setPrimaryColorValidated(color);
     } on NonPresetColorError catch (e) {
@@ -1179,6 +1204,9 @@ class _SwatchTile extends StatelessWidget {
       Color teal500,
     }) palette = derivePalette(color);
 
+    final bool isGreen = color.value == 0xFF1B8A5A || color.value == 0xFF10B981;
+    final bool isLocked = !ProfileService.instance.isPro && !isGreen;
+
     final Widget circle = Container(
       width: diameter,
       height: diameter,
@@ -1201,14 +1229,21 @@ class _SwatchTile extends StatelessWidget {
           ],
         ),
       ),
-      child: selected
+      child: isLocked
           ? Icon(
-              Icons.check,
-              size: checkGlyphSize,
-              color: Colors.white,
-              semanticLabel: 'Selected',
+              Icons.lock_outline,
+              size: checkGlyphSize * 0.8,
+              color: Colors.white.withValues(alpha: 0.8),
+              semanticLabel: 'Locked',
             )
-          : null,
+          : (selected
+              ? Icon(
+                  Icons.check,
+                  size: checkGlyphSize,
+                  color: Colors.white,
+                  semanticLabel: 'Selected',
+                )
+              : null),
     );
 
     return GestureDetector(

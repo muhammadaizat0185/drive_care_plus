@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_tracker_service.dart';
 
 import '../core/theme/color_utils.dart';
 
@@ -200,6 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // pathways below run unmodified.
     await _signInGate.run<void>(() async {
       try {
+        ApiTracker.instance.trackCall('Firebase Core');
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
@@ -248,6 +250,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     try {
+      ApiTracker.instance.trackCall('Firebase Core');
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (!mounted) return;
       _showSnackbar('Password reset email sent to $email.');

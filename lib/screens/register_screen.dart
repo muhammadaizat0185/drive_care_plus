@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../services/api_tracker_service.dart';
 
 import '../core/theme/color_utils.dart';
 
@@ -147,6 +148,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // pathways below run unmodified.
     await _registerGate.run<void>(() async {
       try {
+        ApiTracker.instance.trackCall('Firebase Core');
         await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: password,

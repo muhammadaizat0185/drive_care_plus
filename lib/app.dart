@@ -19,6 +19,7 @@ import 'screens/vehicle_customizer_screen.dart';
 import 'screens/vehicle_screen.dart';
 import 'screens/workshop_map_screen.dart';
 import 'screens/wallet_history_screen.dart';
+import 'screens/cloud_sync_quota_screen.dart';
 import 'services/theme_service.dart';
 
 /// Root application widget.
@@ -121,6 +122,7 @@ class _DriveCarePlusAppState extends State<DriveCarePlusApp> {
             NotificationsScreen.routeName: (_) => const NotificationsScreen(),
             SettingsScreen.routeName: (_) => const SettingsScreen(),
             WalletHistoryScreen.routeName: (_) => const WalletHistoryScreen(),
+            CloudSyncQuotaScreen.routeName: (_) => const CloudSyncQuotaScreen(),
           },
         );
       },

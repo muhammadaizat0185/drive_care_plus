@@ -55,6 +55,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/api_tracker_service.dart';
 
 import '../../core/theme/tokens/tokens.dart';
 import '../../core/util/refuel_math.dart';
@@ -242,6 +243,7 @@ class FirestoreRefuelLogStore implements RefuelLogStore {
     if (user == null) {
       throw StateError('Must be signed in to save a refuel entry.');
     }
+    ApiTracker.instance.trackCall('Cloud Firestore');
     await firestore
         .collection('users')
         .doc(user.uid)

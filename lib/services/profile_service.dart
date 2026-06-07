@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api_tracker_service.dart';
 
 class ProfileService extends ChangeNotifier {
   static final ProfileService instance = ProfileService._internal();
@@ -25,6 +26,10 @@ class ProfileService extends ChangeNotifier {
   double get walletBalance => _walletBalance;
   List<Map<String, dynamic>> get transactions => _transactions;
   bool get isPro => _isPro;
+  set isPro(bool value) {
+    _isPro = value;
+    notifyListeners();
+  }
   DateTime? get subscriptionExpiry => _subscriptionExpiry;
 
   static const List<String> presetAvatars = [
@@ -44,6 +49,7 @@ class ProfileService extends ChangeNotifier {
         _photoUrl = user.photoURL ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
         
         // Fetch extended profile and wallet from Firestore
+        ApiTracker.instance.trackCall('Cloud Firestore');
         final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
         if (doc.exists) {
           final data = doc.data()!;
@@ -56,11 +62,13 @@ class ProfileService extends ChangeNotifier {
           // Check for expiry
           if (_isPro && _subscriptionExpiry != null && DateTime.now().isAfter(_subscriptionExpiry!)) {
             _isPro = false;
+            ApiTracker.instance.trackCall('Cloud Firestore');
             await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'is_pro': false});
           }
         }
 
         // Fetch transactions from sub-collection
+        ApiTracker.instance.trackCall('Cloud Firestore');
         final txnsSnap = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -108,10 +116,12 @@ class ProfileService extends ChangeNotifier {
       if (user != null) {
         // Update Firestore
         final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+        ApiTracker.instance.trackCall('Cloud Firestore');
         await userRef.set({
           'wallet_balance': _walletBalance,
         }, SetOptions(merge: true));
         
+        ApiTracker.instance.trackCall('Cloud Firestore');
         await userRef.collection('wallet_transactions').add(transaction);
       }
 
@@ -132,6 +142,7 @@ class ProfileService extends ChangeNotifier {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        ApiTracker.instance.trackCall('Cloud Firestore');
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'is_pro': true,
           'subscription_expiry': Timestamp.fromDate(_subscriptionExpiry!),

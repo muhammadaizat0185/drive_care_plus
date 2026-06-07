@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/workshop.dart';
+import 'api_tracker_service.dart';
 
 class WorkshopFirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Get localized reviews for a specific workshop (place_id)
   Stream<List<WorkshopReview>> getInternalReviews(String placeId) {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     return _firestore
         .collection('workshop_reviews')
         .where('place_id', isEqualTo: placeId)
@@ -24,6 +26,7 @@ class WorkshopFirebaseService {
 
   // Submit a new review to Firestore
   Future<void> submitReview(String placeId, WorkshopReview review) async {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     await _firestore.collection('workshop_reviews').add({
       'place_id': placeId,
       ...review.toMap(),
@@ -32,6 +35,7 @@ class WorkshopFirebaseService {
 
   // Create a new booking and return the created document ID
   Future<String> createBooking(Map<String, dynamic> bookingData) async {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     final DocumentReference<Map<String, dynamic>> ref = await _firestore.collection('bookings').add({
       ...bookingData,
       'created_at': FieldValue.serverTimestamp(),
@@ -41,6 +45,7 @@ class WorkshopFirebaseService {
 
   /// Updates a booking's fields in Firestore.
   Future<void> updateBooking(String bookingId, Map<String, dynamic> updates) async {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     await _firestore.collection('bookings').doc(bookingId).update(updates);
   }
 
@@ -71,7 +76,9 @@ class WorkshopFirebaseService {
         .collection('favorite_workshops')
         .doc(workshopId);
 
+    ApiTracker.instance.trackCall('Cloud Firestore');
     final DocumentSnapshot<Map<String, dynamic>> snap = await ref.get();
+    ApiTracker.instance.trackCall('Cloud Firestore');
     if (snap.exists) {
       await ref.delete();
       return false;
@@ -86,6 +93,7 @@ class WorkshopFirebaseService {
   /// Returns whether [workshopId] is favorited by [userId]. Used by the
   /// Browse list to seed the heart fill state when a card mounts.
   Future<bool> isFavorite(String workshopId, String userId) async {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     final DocumentSnapshot<Map<String, dynamic>> snap = await _firestore
         .collection('users')
         .doc(userId)
@@ -100,6 +108,7 @@ class WorkshopFirebaseService {
   /// bookings or, when the stream resolves to an empty list, the
   /// `AppEmptyState` `Browse Workshops` CTA.
   Stream<List<Map<String, dynamic>>> watchUserBookings(String userId) {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     return _firestore
         .collection('bookings')
         .where('userId', isEqualTo: userId)
@@ -116,6 +125,7 @@ class WorkshopFirebaseService {
   }
   /// Cancels a booking by setting its status to 'Cancelled'.
   Future<void> cancelBooking(String bookingId) async {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     await _firestore.collection('bookings').doc(bookingId).update(<String, Object>{
       'status': 'Cancelled',
     });
@@ -123,6 +133,7 @@ class WorkshopFirebaseService {
 
   /// Reschedules a booking with a new date and time and resets its status to 'Pending'.
   Future<void> rescheduleBooking(String bookingId, String isoDate, String timeString) async {
+    ApiTracker.instance.trackCall('Cloud Firestore');
     await _firestore.collection('bookings').doc(bookingId).update(<String, Object>{
       'date': isoDate,
       'time': timeString,

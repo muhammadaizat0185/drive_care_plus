@@ -165,7 +165,7 @@ class _HomeCockpitBody extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => const _ProSubscriptionSheet(),
+      builder: (context) => const ProSubscriptionSheet(),
     );
   }
 
@@ -195,34 +195,37 @@ class _HomeCockpitBody extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: isPro
-                        ? const LinearGradient(
-                            colors: [Color(0xFF00B894), Color(0xFF00CEC9)],
-                          )
-                        : null,
-                    color: isPro ? null : Colors.grey.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isPro) ...[
-                        const Icon(Icons.verified, color: Colors.white, size: 12),
-                        const SizedBox(width: 4),
-                      ],
-                      Text(
-                        isPro ? 'PRO' : 'BASIC',
-                        style: TextStyle(
-                          color: isPro ? Colors.white : Colors.grey,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
+                GestureDetector(
+                  onTap: () => _showSubscriptionModal(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: isPro
+                          ? const LinearGradient(
+                              colors: [Color(0xFF00B894), Color(0xFF00CEC9)],
+                            )
+                          : null,
+                      color: isPro ? null : Colors.grey.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isPro) ...[
+                          const Icon(Icons.verified, color: Colors.white, size: 12),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(
+                          isPro ? 'PRO' : 'BASIC',
+                          style: TextStyle(
+                            color: isPro ? Colors.white : Colors.grey,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -347,14 +350,14 @@ class _HomeCockpitBody extends StatelessWidget {
   }
 }
 
-class _ProSubscriptionSheet extends StatefulWidget {
-  const _ProSubscriptionSheet();
+class ProSubscriptionSheet extends StatefulWidget {
+  const ProSubscriptionSheet({super.key});
 
   @override
-  State<_ProSubscriptionSheet> createState() => _ProSubscriptionSheetState();
+  State<ProSubscriptionSheet> createState() => ProSubscriptionSheetState();
 }
 
-class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
+class ProSubscriptionSheetState extends State<ProSubscriptionSheet> {
   bool _isProcessing = false;
 
   Future<void> _startSubscriptionPayment() async {
@@ -407,79 +410,162 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
     }
   }
 
+  TableRow _buildComparisonRow(String feature, String basicVal, String proVal, bool isDark) {
+    return TableRow(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.1))),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Text(
+            feature,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+        ),
+        Text(
+          basicVal,
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        Text(
+          proVal,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isDark ? const Color(0xFF00B894) : const Color(0xFF1B8A5A),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isPro = ProfileService.instance.isPro;
 
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F172A) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00B894).withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.auto_awesome, color: Color(0xFF00B894), size: 32),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'DriveCare+ Pro',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'RM 19.90 / month',
-            style: TextStyle(color: Color(0xFF00B894), fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          const SizedBox(height: 24),
-          _buildFeatureRow(Icons.psychology, 'AI-Powered Maintenance Predictions'),
-          _buildFeatureRow(Icons.history_toggle_off, 'Passive Trip Detection & Recording'),
-          _buildFeatureRow(Icons.cloud_sync, 'Unlimited Cloud Log Backups'),
-          _buildFeatureRow(Icons.analytics, 'Deep Fuel Efficiency Analytics'),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00B894),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00B894).withOpacity(0.1),
+                shape: BoxShape.circle,
               ),
-              onPressed: _isProcessing ? null : _startSubscriptionPayment,
-              child: _isProcessing
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Subscribe & Unlock Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              child: const Icon(Icons.auto_awesome, color: Color(0xFF00B894), size: 32),
             ),
           ),
           const SizedBox(height: 16),
+          const Center(
+            child: Text(
+              'DriveCare+ Pro',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              'RM 19.90 / month',
+              style: TextStyle(color: Color(0xFF00B894), fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Compare Plans',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Table(
+            columnWidths: const {
+              0: FlexColumnWidth(2.5),
+              1: FlexColumnWidth(1.5),
+              2: FlexColumnWidth(1.8),
+            },
+            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+            children: [
+              TableRow(
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.2))),
+                ),
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text('Feature', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                  ),
+                  const Text('Basic', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                  Text(
+                    'Pro',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: isDark ? const Color(0xFF00B894) : const Color(0xFF1B8A5A),
+                    ),
+                  ),
+                ],
+              ),
+              _buildComparisonRow('Max Registered Vehicles', '2 Cars', 'Unlimited', isDark),
+              _buildComparisonRow('Document Vault Storage', '5 MB', '50 MB', isDark),
+              _buildComparisonRow('Journey Log Retention', '30 Days', 'Lifetime', isDark),
+              _buildComparisonRow('Premium Accent Styles', 'Green Only', 'All Accent Styles', isDark),
+            ],
+          ),
+          const SizedBox(height: 32),
+          if (isPro) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00B894).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF00B894).withOpacity(0.3)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle, color: Color(0xFF00B894)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Your Pro Plan is active!',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00B894)),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00B894),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                onPressed: _isProcessing ? null : _startSubscriptionPayment,
+                child: _isProcessing
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Subscribe & Unlock Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Maybe Later', style: TextStyle(color: Colors.grey)),
+            child: const Text('Close', style: TextStyle(color: Colors.grey)),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFF00B894)),
-          const SizedBox(width: 12),
-          Text(text, style: const TextStyle(fontSize: 14)),
-        ],
-      ),
+      ),),
     );
   }
 }

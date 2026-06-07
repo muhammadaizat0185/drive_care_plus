@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'api_tracker_service.dart';
 
 class ToyyibPayService {
   // ToyyibPay Sandbox/Dev Server API URL
@@ -20,6 +21,7 @@ class ToyyibPayService {
     required String payerEmail,
     required String payerPhone,
   }) async {
+    ApiTracker.instance.trackCall('ToyyibPay API');
     final url = Uri.parse('$baseUrl/createBill');
     
     // ToyyibPay standard API expects billAmount as decimal string (e.g. "50.00" for RM 50)
@@ -91,6 +93,7 @@ class ToyyibPayService {
     required String payerEmail,
     required String payerPhone,
   }) async {
+    ApiTracker.instance.trackCall('ToyyibPay API');
     final url = Uri.parse('$baseUrl/createBill');
     
     // Pro Subscription Price: RM 19.90 (Fixed for this project context)

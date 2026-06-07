@@ -1,11 +1,13 @@
-  import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme/color_utils.dart';
 import '../services/car_database.dart';
+import '../services/profile_service.dart';
 import '../services/vehicle_insights.dart';
 import '../widgets/car_health_overlay.dart';
+import 'home_screen.dart';
 import 'vehicle_customizer_screen.dart';
 
 class VehicleScreen extends StatefulWidget {
@@ -460,7 +462,9 @@ class VehicleScreen extends StatefulWidget {
                           ),
                           child: Center(
                             child: SvgPicture.asset(
-                              'assets/images/cars/Car Vector/SVG/${vehicle['carType'] ?? 'sedan'}_front.svg',
+                              vehicle['carType'] == 'exoraGold'
+                                  ? 'assets/images/cars/Premium/exoraGold_front.svg'
+                                  : 'assets/images/cars/Car Vector/SVG/${vehicle['carType'] ?? 'sedan'}_front.svg',
                               height: 50,
                             ),
                           ),
@@ -712,6 +716,18 @@ class VehicleScreen extends StatefulWidget {
   }
 
   void _showRegisterVehicleDialog() {
+    final bool isPro = ProfileService.instance.isPro;
+    final int carCount = VehicleInsights.instance.vehicles.length;
+    if (!isPro && carCount >= 2) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (context) => const ProSubscriptionSheet(),
+      );
+      return;
+    }
+
     final plateController = TextEditingController();
     final mileageController = TextEditingController();
     

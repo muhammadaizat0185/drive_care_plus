@@ -33,7 +33,9 @@ class CarHealthOverlay extends StatelessWidget {
       children: [
         // The Side View Car SVG
         SvgPicture.asset(
-          'assets/images/cars/Car Vector/SVG/${carType}_left_side.svg',
+          carType == 'exoraGold'
+              ? 'assets/images/cars/Premium/exoraGold_left_side.svg'
+              : 'assets/images/cars/Car Vector/SVG/${carType}_left_side.svg',
           height: 140,
         ),
         

@@ -21,6 +21,7 @@ import 'package:drive_care_plus/screens/maintenance_screen.dart';
 import 'package:drive_care_plus/screens/toyyibpay_webview_screen.dart';
 import 'package:drive_care_plus/widgets/ui/ui.dart';
 import 'package:drive_care_plus/services/vehicle_insights.dart';
+import 'package:drive_care_plus/services/notification_service.dart';
 import '../widgets/ui/_test_host.dart';
 
 void main() {
@@ -99,24 +100,50 @@ void main() {
 
   group('NotificationsScreen widget tests', () {
     testWidgets(
-      'renders reminder cards, notification plan header, and AppListTiles (Task 14.4)',
+      'renders empty state when inbox is empty',
       (WidgetTester tester) async {
+        final service = NotificationService.instance;
+        await service.clearAll();
+
         await tester.pumpWidget(
           hostApp(child: const NotificationsScreen()),
         );
+        await tester.pumpAndSettle();
 
         expect(find.text('Notifications'), findsOneWidget);
-        expect(find.text('Push Notification Plan'), findsOneWidget);
-        expect(find.text('REMINDERS'), findsOneWidget);
+        expect(find.text('No notifications yet'), findsOneWidget);
+        expect(find.textContaining('Booking confirmations and'), findsOneWidget);
+      },
+    );
 
-        // Verifies the exact copy is preserved verbatim.
-        expect(find.text('Oil change reminder will be sent 7 days before due date.'), findsOneWidget);
-        expect(find.text('Workshop quotation reply will trigger a push notification.'), findsOneWidget);
-        expect(find.text('Insurance expiry reminder will be sent 30 days before expiry.'), findsOneWidget);
+    testWidgets(
+      'renders cards when notifications are present',
+      (WidgetTester tester) async {
+        final service = NotificationService.instance;
+        await service.clearAll();
+        await service.showBookingConfirmation(
+          workshopName: 'Budi Workshop',
+          date: '12 June 2026',
+          time: '10:00 AM',
+        );
+        await service.showMaintenanceReminder(
+          itemName: 'Oil Change',
+          detail: 'Your oil change is due in 500 km.',
+        );
 
-        // Uses AppCard and AppListTile primitives.
-        expect(find.byType(AppCard), findsAtLeastNWidgets(4));
-        expect(find.byType(AppListTile), findsNWidgets(3));
+        await tester.pumpWidget(
+          hostApp(child: const NotificationsScreen()),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Notifications'), findsOneWidget);
+        expect(find.text('Booking Confirmed ✅'), findsOneWidget);
+        expect(find.textContaining('Budi Workshop'), findsOneWidget);
+        expect(find.text('🔧 Maintenance Due: Oil Change'), findsOneWidget);
+        expect(find.text('Your oil change is due in 500 km.'), findsOneWidget);
+
+        // Uses AppCard primitive.
+        expect(find.byType(AppCard), findsAtLeastNWidgets(2));
       },
     );
   });
