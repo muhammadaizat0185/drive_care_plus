@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_tracker_service.dart';
+import '../services/auth_cleanup_service.dart';
 
 import '../core/theme/color_utils.dart';
 
@@ -210,6 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('is_offline_logged_in', true);
         } catch (_) {}
+        await AuthCleanupService.initializeUserData();
         if (mounted) {
           Navigator.pushReplacementNamed(context, HomeScreen.routeName);
         }
@@ -224,6 +226,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setBool('is_offline_logged_in', true);
         } catch (_) {}
         _showSnackbar('Firebase Offline Mode: Logging in as dummy user.');
+        await AuthCleanupService.initializeUserData();
         await Future.delayed(const Duration(milliseconds: 600));
         if (mounted) {
           Navigator.pushReplacementNamed(context, HomeScreen.routeName);

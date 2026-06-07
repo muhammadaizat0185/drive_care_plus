@@ -479,6 +479,32 @@ class VehicleInsights extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> clear() async {
+    _model = 'Perodua Axia';
+    _plate = 'ABC 1234';
+    _fuelType = 'Petrol';
+    _engine = '1.0L VVT-i (1KR-VE)';
+    _transmission = '4-Speed Automatic';
+    _fuelCapacityLiters = 36.0;
+    _recommendedTyrePressurePsi = 36.0;
+    _engineOilCapacityLiters = 3.0;
+
+    _currentMileageKm = 38200;
+    _recentTripDistanceKm = 24.6;
+    _recentTripFuelCostRm = 5.40;
+    _carType = 'sedan';
+    _carColor = '#3B82F6';
+
+    _maintenanceData = {};
+    _mileageHistory = [];
+    _bookings = [];
+    _documents = [];
+    _vehicles = [];
+    _activeVehicleIndex = 0;
+
+    notifyListeners();
+  }
+
   // Static pure utility functions
   static double kmPerLiter({
     required double distanceKm,

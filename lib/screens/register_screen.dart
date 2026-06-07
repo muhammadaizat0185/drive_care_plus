@@ -1,9 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/api_tracker_service.dart';
+import '../services/auth_cleanup_service.dart';
 
 import '../core/theme/color_utils.dart';
-
 import '../core/theme/tokens/tokens.dart';
 import '../core/util/in_flight_gate.dart';
 import '../widgets/ui/ui.dart';
@@ -153,14 +153,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           email: email,
           password: password,
         );
-        // Update the freshly-created user's display name so downstream
-        // services (ProfileService, greeting helper) pick up the value
-        // on first launch.
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           await user.updateDisplayName(name);
         }
-
+        await AuthCleanupService.initializeUserData();
         if (mounted) {
           Navigator.pushReplacementNamed(context, HomeScreen.routeName);
         }
@@ -172,6 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // the user is not blocked on a misconfigured environment.
         debugPrint('Firebase Register Error fallback: $e');
         _showSnackbar('Firebase Offline Mode: Registering dummy account.');
+        await AuthCleanupService.initializeUserData();
         await Future.delayed(const Duration(milliseconds: 600));
         if (mounted) {
           Navigator.pushReplacementNamed(context, HomeScreen.routeName);

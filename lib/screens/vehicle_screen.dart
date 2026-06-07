@@ -462,8 +462,21 @@ class VehicleScreen extends StatefulWidget {
                           ),
                           child: Center(
                             child: SvgPicture.asset(
-                              vehicle['carType'] == 'exoraGold'
-                                  ? 'assets/images/cars/Premium/exoraGold_front.svg'
+                               const <String>{
+                                 'exoraGold',
+                                 'axiaBlue',
+                                 'axiaRed',
+                                 'axiaWhite',
+                                 'exoraBrown',
+                                 'myviBlack',
+                                 'myviBlue',
+                                 'myviRed',
+                                 'myviWhite',
+                                 'sagaBlack',
+                                 'sagaRed',
+                                 'sagaSilver',
+                               }.contains(vehicle['carType'])
+                                  ? 'assets/images/cars/Premium/${vehicle['carType']}_front.svg'
                                   : 'assets/images/cars/Car Vector/SVG/${vehicle['carType'] ?? 'sedan'}_front.svg',
                               height: 50,
                             ),

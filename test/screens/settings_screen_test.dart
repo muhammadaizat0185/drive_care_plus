@@ -291,7 +291,7 @@ class _FakeHttpHeaders implements HttpHeaders {
 const String _kLoginStubText = 'login-stub';
 
 Future<void> _pumpSettings(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(1080, 1920);
+  tester.view.physicalSize = const Size(1080, 2200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -423,7 +423,7 @@ void main() {
       (tester) async {
         await _pumpSettings(tester);
 
-        final Finder phoneFieldFinder = find.byType(AppTextField).at(1);
+        final Finder phoneFieldFinder = find.byType(AppTextField).at(2);
         // Six digits — below the 7-digit minimum.
         await tester.enterText(phoneFieldFinder, '123456');
         await tester.pump();
