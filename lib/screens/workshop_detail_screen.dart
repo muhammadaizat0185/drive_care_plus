@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/workshop_firebase_service.dart';
+import '../services/vehicle_insights.dart';
 import '../widgets/star_rating.dart';
 import '../widgets/rating_form_dialog.dart';
 
@@ -784,7 +785,24 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       'status': 'Pending',
     };
 
-    await _firebaseService.createBooking(bookingData);
+    try {
+      await _firebaseService.createBooking(bookingData);
+      
+      // Sync with local VehicleInsights for the classic booking screen.
+      final localBookingData = {
+        'workshopId': _currentWorkshop.id,
+        'workshopName': _currentWorkshop.name,
+        'serviceName': _selectedServiceType,
+        'servicePrice': 150.0,
+        'totalCost': 150.0,
+        'date': '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+        'time': _selectedTime!.format(context),
+        'status': 'Pending',
+      };
+      await VehicleInsights.instance.addBooking(localBookingData);
+    } catch (e) {
+      debugPrint('Error creating booking: $e');
+    }
     
     if (mounted) {
       showDialog(
