@@ -1,13 +1,36 @@
+// Token + Component_Library sweep (Group 14, Task 14.5).
+//
+// This sweep replaces every literal hex/spacing/radius/typography in the
+// splash screen with token references read off `Theme.of(context)`
+// extensions, while preserving the splash routing logic verbatim:
+//   * `Timer(Duration(milliseconds: 2500), …)` delay
+//   * `FirebaseAuth.instance.currentUser` read
+//   * `SharedPreferences.getInstance().getBool('is_offline_logged_in')` read
+//   * `Navigator.pushReplacement(... PageRouteBuilder ... FadeTransition ...)`
+//
+// Visual constants (font sizes, weights, padding, radii, spacing) come from
+// `AppTypographyExt`, `AppSpacingExt`, `AppRadiiExt`, `AppColorsExt`. No raw
+// hex or spacing/radius literals remain (Requirement 12.1).
+
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/tokens/tokens.dart';
+import '../widgets/ui/ui.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final Widget? homeScreenOverride;
+  final Widget? loginScreenOverride;
+
+  const SplashScreen({
+    super.key,
+    this.homeScreenOverride,
+    this.loginScreenOverride,
+  });
 
   static const routeName = '/';
 
@@ -16,6 +39,17 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  // Splash hold duration. Held as a private constant because it is the
+  // splash routing contract, not a `AppMotion` token (which tops out at
+  // `slow = 500ms`).
+  static const Duration _splashHold = Duration(milliseconds: 2500);
+  static const Duration _fadeDuration = Duration(milliseconds: 650);
+
+  // Hero logo height. Not a Token_Set value, so encoded locally.
+  static const double _logoHeight = 120;
+  // Width of the linear progress indicator. Not a Token_Set value.
+  static const double _progressWidth = 140;
+
   @override
   void initState() {
     super.initState();
@@ -23,29 +57,41 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   void _startTransitionTimer() {
-    Timer(const Duration(milliseconds: 2500), () async {
+    Timer(_splashHold, () async {
       if (mounted) {
-        // Import SharedPreferences inside or at top level. Let's add SharedPreferences import at the top.
-        final user = FirebaseAuth.instance.currentUser;
+        User? user;
+        try {
+          user = FirebaseAuth.instance.currentUser;
+        } catch (_) {}
         bool isOfflineLoggedIn = false;
         try {
           final prefs = await SharedPreferences.getInstance();
           isOfflineLoggedIn = prefs.getBool('is_offline_logged_in') ?? false;
         } catch (_) {}
 
-        final Widget nextScreen = (user != null || isOfflineLoggedIn) ? const HomeScreen() : const LoginScreen();
+        final Widget nextScreen = (user != null || isOfflineLoggedIn)
+            ? (widget.homeScreenOverride ?? const HomeScreen())
+            : (widget.loginScreenOverride ?? const LoginScreen());
 
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            settings: RouteSettings(
+              name: (user != null || isOfflineLoggedIn)
+                  ? HomeScreen.routeName
+                  : LoginScreen.routeName,
+            ),
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                nextScreen,
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
               return FadeTransition(
                 opacity: animation,
                 child: child,
               );
             },
-            transitionDuration: const Duration(milliseconds: 650),
+            transitionDuration: _fadeDuration,
           ),
         );
       }
@@ -54,48 +100,51 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+
+    final Color mutedForeground =
+        colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
+
     return Scaffold(
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(spacing.xl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
                 'assets/images/logo/app_logo.png',
-                height: 120,
+                height: _logoHeight,
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: spacing.xxl),
               Text(
                 'DriveCare+',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
+                style: typography.headlineLarge.copyWith(
+                  color: colors.foreground,
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: spacing.sm),
               Text(
                 'Smart vehicle maintenance and trip tracker',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.grey.shade600,
+                style: typography.bodyLarge.copyWith(
+                  color: mutedForeground,
                 ),
               ),
-              const SizedBox(height: 48),
+              SizedBox(height: spacing.xxxxl),
               const SizedBox(
-                width: 140,
-                child: LinearProgressIndicator(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                ),
+                width: _progressWidth,
+                child: AppSpinner(),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: spacing.lg),
               Text(
                 'Loading profile...',
-                style: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                style: typography.body.copyWith(
+                  color: mutedForeground,
                 ),
               ),
             ],

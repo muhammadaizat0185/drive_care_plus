@@ -1,13 +1,35 @@
+// Token + Component_Library sweep (Group 14, Task 14.1).
+//
+// Sweep summary:
+//   * Hex literals (#0F172A, #F9FAFB, #1E293B, #1F2937) replaced with
+//     token-driven background and surface colors.
+//   * Search bar swapped to `AppTextField`.
+//   * Workshop list cards extracted to `BookingWorkshopCard` (uses
+//     `AppCard` + `AppSecondaryButton` + `AppGradientButton`).
+//   * Confirmed booking cards extracted to `BookingConfirmedCard`
+//     (uses `AppCard`).
+//   * Inline `CircularProgressIndicator` swapped to `AppSpinner`.
+//   * Empty branches rendered via `AppEmptyState`.
+//
+// PRESERVED (Requirements 12.6, 14.5):
+//   * `Geolocator.checkPermission`, `requestPermission`, `getCurrentPosition`,
+//     `distanceBetween` calls unchanged.
+//   * `GoogleMapsService.searchNearbyWorkshops(LatLng, maxDistance,
+//     includedTypes: [...])` call signature unchanged.
+//   * `Workshop.fromGooglePlace(json)` mapping unchanged.
+//   * `VehicleInsights.instance.bookings` listener unchanged.
+//   * `WorkshopDetailScreen(workshop: workshop)` navigation unchanged.
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../core/theme/tokens/tokens.dart';
 import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/vehicle_insights.dart';
-import '../widgets/glass_container.dart';
-import 'workshop_detail_screen.dart';
+import '../widgets/ui/ui.dart';
+import 'booking/_widgets.dart';
 
 class BookingScreen extends StatelessWidget {
   const BookingScreen({super.key});
@@ -16,20 +38,16 @@ class BookingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: isDark
-              ? [
-                  const Color(0xFF0F172A), // Deep Slate Dark
-                  primaryColor.withOpacity(0.2), // Themed Dark
-                ]
-              : [
-                  primaryColor.withOpacity(0.05), // Soft themed pastel
-                  const Color(0xFFF9FAFB), // Soft premium grey
-                ],
+          colors: [
+            colors.background,
+            colors.muted,
+          ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -39,7 +57,7 @@ class BookingScreen extends StatelessWidget {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: const Text('Workshops & Bookings', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: const Text('Workshops & Bookings'),
             bottom: const TabBar(
               tabs: [
                 Tab(
@@ -79,6 +97,10 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
   List<Workshop> workshops = [];
   bool isLoading = false;
   Position? currentPosition;
+  late final TextEditingController _searchController;
+
+  // Horizontal category row height. Not a Token_Set value.
+  static const double _categoryRowHeight = 115;
 
   final List<Map<String, dynamic>> categories = [
     {'name': 'Carwash', 'icon': Icons.local_car_wash_rounded},
@@ -90,7 +112,14 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     _getCurrentLocationAndSearch();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _getCurrentLocationAndSearch() async {
@@ -103,7 +132,7 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
 
       final position = await Geolocator.getCurrentPosition();
       setState(() => currentPosition = position);
-      
+
       await _searchWorkshops();
     } catch (e) {
       debugPrint('Location Error: $e');
@@ -114,9 +143,9 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
 
   Future<void> _searchWorkshops() async {
     if (currentPosition == null) return;
-    
+
     setState(() => isLoading = true);
-    
+
     List<String>? includedTypes;
     if (selectedCategory == 'Repair') {
       includedTypes = ['car_repair'];
@@ -137,7 +166,7 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
       setState(() {
         workshops = results
             .map((json) => Workshop.fromGooglePlace(json))
-            .where((w) => !w.isGasStation) // Exclude gas stations here as per request
+            .where((w) => !w.isGasStation) // Exclude gas stations.
             .map((w) {
           if (w.location != null && currentPosition != null) {
             final dist = Geolocator.distanceBetween(
@@ -171,67 +200,50 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+
+    final Color mutedForeground =
+        colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
+      padding: EdgeInsets.fromLTRB(
+        spacing.xl,
+        spacing.lg,
+        spacing.xl,
+        spacing.xxxxl + spacing.xxl,
+      ),
       children: [
         Text(
           'Choose the best\nservice for you',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                height: 1.2,
-                letterSpacing: -0.5,
-                color: isDark ? Colors.white : const Color(0xFF1F2937),
-              ),
+          style: typography.headlineLarge.copyWith(color: colors.foreground),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: spacing.lg),
 
-        Container(
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: isDark ? Colors.black26 : Colors.black.withAlpha(8),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: TextField(
-            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-            onChanged: (val) {
-              setState(() {
-                searchQuery = val;
-              });
-            },
-            decoration: InputDecoration(
-              hintText: 'Search services, workshops...',
-              hintStyle: const TextStyle(color: Colors.grey),
-              prefixIcon: const Icon(Icons.search, color: Colors.grey),
-              filled: true,
-              fillColor: Colors.transparent,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
+        AppTextField(
+          controller: _searchController,
+          hintText: 'Search services, workshops...',
+          prefixIcon: Icons.search,
+          onChanged: (val) {
+            setState(() {
+              searchQuery = val;
+            });
+          },
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: spacing.lg),
 
         Row(
           children: [
-            Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary, size: 20),
-            const SizedBox(width: 8),
+            Icon(Icons.location_on,
+                color: colors.emerald500,
+                size: typography.title.fontSize),
+            SizedBox(width: spacing.sm),
             Text(
               'Within ${maxDistance.toInt()} km',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white70 : Colors.black87,
-              ),
+              style: typography.bodyLarge.copyWith(color: colors.foreground),
             ),
             Expanded(
               child: Slider(
@@ -250,24 +262,19 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: spacing.lg),
 
         Text(
           'Service Categories',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
-            color: isDark ? Colors.white70 : Colors.black87,
-            letterSpacing: -0.2,
-          ),
+          style: typography.bodyLarge.copyWith(color: colors.foreground),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.md),
         SizedBox(
-          height: 115,
+          height: _categoryRowHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: categories.length,
-            separatorBuilder: (_, index) => const SizedBox(width: 14),
+            separatorBuilder: (_, index) => SizedBox(width: spacing.md),
             itemBuilder: (context, index) {
               final cat = categories[index];
               final isSelected = cat['name'] == selectedCategory;
@@ -279,106 +286,98 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
                   _searchWorkshops();
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  child: GlassContainer(
-                    borderRadius: 24,
-                    blurSigma: 12,
-                    opacity: isSelected ? 0.18 : 0.05,
-                    backgroundColor: isSelected 
-                        ? Theme.of(context).colorScheme.primary 
-                        : (isDark ? Colors.white : Colors.black),
-                    borderColor: isSelected
-                        ? Theme.of(context).colorScheme.primary.withOpacity(0.6)
-                        : (isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08)),
-                    borderWidth: isSelected ? 1.5 : 0.8,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? Colors.white.withOpacity(0.2)
-                                : Theme.of(context).colorScheme.primary.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            cat['icon'] as IconData,
-                            color: isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          cat['name'] as String,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
-                            color: isSelected 
-                                ? (isDark ? Colors.white : Theme.of(context).colorScheme.primary) 
-                                : (isDark ? Colors.white70 : Colors.black54),
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
+                  duration: theme.extension<AppMotionExt>()!.normal,
+                  curve: theme.extension<AppMotionExt>()!.standard,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: spacing.lg,
+                    vertical: spacing.md,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? colors.emerald500
+                            .withValues(alpha: colors.surfaceMedium)
+                        : colors.card,
+                    borderRadius: BorderRadius.circular(radii.large),
+                    border: Border.all(
+                      color: isSelected ? colors.emerald500 : colors.border,
+                      width: isSelected ? 1.5 : 1.0,
                     ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: spacing.xxxxl,
+                        height: spacing.xxxxl,
+                        decoration: BoxDecoration(
+                          color: colors.emerald500
+                              .withValues(alpha: colors.surfaceMedium),
+                          borderRadius: BorderRadius.circular(radii.medium),
+                        ),
+                        child: Icon(
+                          cat['icon'] as IconData,
+                          color: colors.emerald500,
+                          size: typography.title.fontSize,
+                        ),
+                      ),
+                      SizedBox(height: spacing.sm),
+                      Text(
+                        cat['name'] as String,
+                        style: typography.body.copyWith(
+                          color: isSelected
+                              ? colors.emerald500
+                              : mutedForeground,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
             },
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: spacing.xl),
 
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               'Top Recommended Workshops',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white70 : Colors.black87,
-              ),
+              style:
+                  typography.bodyLarge.copyWith(color: colors.foreground),
             ),
-            if (isLoading)
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+            if (isLoading) const AppSpinner(size: 14),
           ],
         ),
-        const SizedBox(height: 16),
-        
+        SizedBox(height: spacing.lg),
+
         if (isLoading && workshops.isEmpty)
-          const Center(child: Padding(
-            padding: EdgeInsets.all(32.0),
-            child: CircularProgressIndicator(),
-          ))
+          Padding(
+            padding: EdgeInsets.all(spacing.xxl),
+            child: const Center(child: AppSpinner()),
+          )
         else if (workshops.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
-            child: Column(
-              children: [
-                Icon(Icons.search_off_outlined, size: 48, color: Colors.grey),
-                SizedBox(height: 8),
-                Text('No workshops found in this area.', style: TextStyle(color: Colors.grey)),
-              ],
-            ),
+          const AppEmptyState(
+            icon: Icons.search_off_outlined,
+            title: 'No workshops found',
+            message: 'Try a different category or expand your search radius.',
           )
         else
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: workshops.length,
-            separatorBuilder: (_, index) => const SizedBox(height: 12),
+            separatorBuilder: (_, index) => SizedBox(height: spacing.md),
             itemBuilder: (context, index) {
               final workshop = workshops[index];
-              return _WorkshopCard(workshop: workshop);
+              // Apply search filter at render time (preserved logic).
+              if (searchQuery.isNotEmpty &&
+                  !workshop.name
+                      .toLowerCase()
+                      .contains(searchQuery.toLowerCase())) {
+                return const SizedBox.shrink();
+              }
+              return BookingWorkshopCard(workshop: workshop);
             },
           ),
       ],
@@ -391,350 +390,33 @@ class _MyBookingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+
     return ListenableBuilder(
       listenable: VehicleInsights.instance,
       builder: (context, child) {
         final bookings = VehicleInsights.instance.bookings;
 
         if (bookings.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.event_busy_outlined,
-                    size: 64,
-                    color: Colors.grey,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'No appointments booked',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Browse workshops in the first tab to book services.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
+          return const AppEmptyState(
+            icon: Icons.event_busy_outlined,
+            title: 'No appointments booked',
+            message:
+                'Browse workshops in the first tab to book services.',
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
+        return ListView.separated(
+          padding: EdgeInsets.all(spacing.lg),
           itemCount: bookings.length,
+          separatorBuilder: (_, _) => SizedBox(height: spacing.md),
           itemBuilder: (context, index) {
             final booking = bookings[index];
-            final price = booking['servicePrice'] as double? ?? 0.0;
-            final status = booking['status'] as String? ?? 'Confirmed';
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            booking['workshopName'] ?? 'Workshop',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
-                          ),
-                          child: Text(
-                            status,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 24),
-                    Row(
-                      children: [
-                        const Icon(Icons.build_circle_outlined, size: 20, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            booking['serviceName'] ?? 'Service',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_month_outlined, size: 20, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Text('${booking['date']} at ${booking['time']}'),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.payments_outlined, size: 20, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Estimated: RM ${price.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
+            return BookingConfirmedCard(booking: booking);
           },
         );
       },
     );
-  }
-}
-
-class _WorkshopCard extends StatelessWidget {
-  const _WorkshopCard({required this.workshop});
-
-  final Workshop workshop;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    
-    final String statusLabel = workshop.isOpenNow == true ? 'Open Now' : (workshop.isOpenNow == false ? 'Closed' : 'Status: N/A');
-    final Color statusColor = workshop.isOpenNow == true ? Colors.green : Colors.red;
-
-    String typeLabel = 'Automotive';
-    if (workshop.types.contains('car_repair')) typeLabel = 'Workshop';
-    else if (workshop.types.contains('gas_station')) typeLabel = 'Fuel & Services';
-    else if (workshop.types.contains('car_wash')) typeLabel = 'Car Wash';
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withAlpha(10),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withAlpha(20),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'POPULAR',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              typeLabel.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                color: isDark ? Colors.white70 : Colors.black54,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        workshop.name,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withAlpha(30),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        workshop.rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  workshop.distance ?? 'Nearby',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(width: 12),
-                const Icon(Icons.comment_outlined, size: 14, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  '${workshop.reviewCount} Reviews',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            RichText(
-              text: TextSpan(
-                style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontSize: 13),
-                children: [
-                  const TextSpan(text: 'Status: ', style: TextStyle(color: Colors.grey)),
-                  TextSpan(
-                    text: statusLabel,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: statusColor,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _launchNavigation,
-                    icon: const Icon(Icons.directions, size: 18),
-                    label: const Text('Navigate', style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _openDetails(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      minimumSize: const Size(0, 40),
-                    ),
-                    child: Text(
-                      workshop.isGasStation ? 'View Details' : 'Book Now',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openDetails(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkshopDetailScreen(workshop: workshop),
-      ),
-    );
-  }
-
-  Future<void> _launchNavigation() async {
-    if (workshop.location == null) return;
-    
-    final lat = workshop.location!.latitude;
-    final lng = workshop.location!.longitude;
-    final url = Uri.parse('google.navigation:q=$lat,$lng');
-    final webUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-    
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url);
-      } else {
-        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-    }
   }
 }

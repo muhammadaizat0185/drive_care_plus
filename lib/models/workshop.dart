@@ -1,6 +1,30 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+/// Closed set of categories used by the redesigned Workshops Browse tab to
+/// filter the list with a single-selection chip row (`All / Repair /
+/// Car Wash / Parts`).
+///
+/// The enum is derived purely from the existing free-form `Workshop.types`
+/// list returned by Google Places — no Firestore schema migration is
+/// required (Task 9.1 scope: "Map existing workshop docs to the enum
+/// without schema migration"). The `category` getter on [Workshop]
+/// performs the mapping.
+///
+/// Members:
+///
+///   * [all]     — sentinel matching every workshop. Used by the chip row's
+///                 default "All" pill; never returned by `Workshop.category`
+///                 itself (workshops always classify as one of the three
+///                 concrete buckets).
+///   * [repair]  — general car-repair shops (`car_repair`, `car_repairer`).
+///   * [carWash] — car-wash specialists (`car_wash`).
+///   * [parts]   — parts and gas-stop adjacent (`car_dealer`, `gas_station`,
+///                 and explicit `parts` annotations from the Places taxonomy).
+///
+/// See: figma-ui-redesign Requirements 7.2, 14.3, 14.9.
+enum WorkshopCategory { all, repair, carWash, parts }
+
 class Workshop {
   const Workshop({
     required this.id,
@@ -41,6 +65,32 @@ class Workshop {
   bool get isGasStation => types.contains('gas_station');
   bool get isCarWash => types.contains('car_wash');
   bool get isRepairShop => types.contains('car_repair') || types.contains('car_repairer');
+
+  /// Concrete [WorkshopCategory] derived purely from the existing [types]
+  /// list (no Firestore migration). The mapping is defined precedence-first
+  /// — repair beats car-wash beats parts — so a workshop tagged as both
+  /// `car_repair` and `gas_station` (uncommon, but possible from Google
+  /// Places) classifies as [WorkshopCategory.repair].
+  ///
+  /// Workshops with no recognised type fall back to [WorkshopCategory.parts]
+  /// because the Browse tab's chip row exposes no "Other" bucket; routing
+  /// the long tail to `parts` keeps every workshop reachable when the
+  /// "Parts" chip is selected without inventing a new chip the design does
+  /// not specify.
+  ///
+  /// Never returns [WorkshopCategory.all] — that value is reserved for the
+  /// chip row's "All" sentinel and represents a *filter*, not a workshop.
+  ///
+  /// See: figma-ui-redesign Requirement 7.2, Task 9.1.
+  WorkshopCategory get category {
+    if (isRepairShop) {
+      return WorkshopCategory.repair;
+    }
+    if (isCarWash) {
+      return WorkshopCategory.carWash;
+    }
+    return WorkshopCategory.parts;
+  }
 
   factory Workshop.fromGooglePlace(Map<String, dynamic> json) {
     return Workshop(

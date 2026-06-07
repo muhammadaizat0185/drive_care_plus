@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
@@ -96,7 +97,7 @@ class LocationTaskHandler extends TaskHandler {
         // Note: We might just do this on-demand in the UI if we want to save API calls, 
         // but since we want the actual route distance, it's fine.
         final rawLatLng = pointsData.map((p) => LatLng(p['latitude'], p['longitude'])).toList();
-        final snappedPoints = await GoogleMapsService.snapToRoads(rawLatLng);
+        await GoogleMapsService.snapToRoads(rawLatLng);
         
         // Reverse Geocode the final coordinate to update the destination address
         String? finalDestAddress;
@@ -106,10 +107,10 @@ class LocationTaskHandler extends TaskHandler {
               lastPoint['latitude'], lastPoint['longitude']);
           if (placemarks.isNotEmpty) {
             final place = placemarks.first;
-            finalDestAddress = "\${place.name}, \${place.locality}";
+            finalDestAddress = "${place.name}, ${place.locality}";
           }
         } catch (e) {
-          print("Geocoding failed: \$e");
+          debugPrint("Geocoding failed: $e");
         }
 
         // Finalize the journey in the database (this will only overwrite if it was a passive journey,

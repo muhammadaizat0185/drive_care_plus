@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'glass_container.dart';
 import '../services/vehicle_insights.dart';
-import '../screens/home_screen.dart';
 
 class VehicleHealthGauge extends StatelessWidget {
   const VehicleHealthGauge({super.key});

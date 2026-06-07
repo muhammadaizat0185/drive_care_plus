@@ -1,673 +1,219 @@
+// Redesigned Refuel Log screen for the figma-ui-redesign
+// (Tasks 11.1 – 11.14 — Requirements 9.1 – 9.10).
+//
+// The body is composed from the modular widgets in
+// `lib/screens/refuel/_widgets.dart`:
+//
+//   * LogTab       — Distance / liters / price-per-liter fields with
+//                    positive-decimal filter, fuel-type chip row,
+//                    Save Refuel CTA, validation, and DB-failure
+//                    handling (Tasks 11.2 – 11.6, 11.9).
+//   * HistoryTab   — `AppCard` per saved entry, descending date order,
+//                    efficiency km/L (Tasks 11.10, 11.12).
+//   * InsightsTab  — Existing FuelChart wrapped in `AppCard`
+//                    (Tasks 11.13, 11.14).
+//
+// The screen owns the live list of entries fetched from the existing
+// `users/{uid}/refuel_logs` Firestore collection and pipes them into
+// the History and Insights tabs. The Log tab persists through a
+// [RefuelLogStore] (production: [FirestoreRefuelLogStore]) so widget
+// tests can inject an [InMemoryRefuelLogStore] without dragging
+// Firebase into the flutter_test process.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../services/google_maps_service.dart';
-import '../models/workshop.dart';
-import 'workshop_detail_screen.dart';
-
-import '../services/vehicle_insights.dart';
-import '../widgets/eco_insights_card.dart';
-import '../widgets/fuel_chart.dart';
+import '../core/theme/tokens/tokens.dart';
+import 'refuel/_widgets.dart';
 
 class RefuelLogScreen extends StatefulWidget {
-  const RefuelLogScreen({super.key});
+  const RefuelLogScreen({
+    super.key,
+    this.store,
+    this.entriesOverride,
+  });
 
-  static const routeName = '/refuel-log';
+  static const String routeName = '/refuel-log';
+
+  /// Optional persistence binding for tests. In production the screen
+  /// constructs a [FirestoreRefuelLogStore] internally; widget tests
+  /// inject an [InMemoryRefuelLogStore] so Firebase isn't required.
+  final RefuelLogStore? store;
+
+  /// Optional immediate entry list for tests / previews. When
+  /// non-null the screen skips its Firestore stream and renders the
+  /// supplied list verbatim. Production callers leave this null.
+  final List<RefuelEntry>? entriesOverride;
 
   @override
   State<RefuelLogScreen> createState() => _RefuelLogScreenState();
 }
 
-class _RefuelLogScreenState extends State<RefuelLogScreen> {
-  final _distanceController = TextEditingController(text: '420');
-  final _litersController = TextEditingController(text: '28');
-  final _priceController = TextEditingController(text: '2.05');
+class _RefuelLogScreenState extends State<RefuelLogScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  late final RefuelLogStore _store;
 
-  double _distanceKm = 420;
-  double _liters = 28;
-  double _pricePerLiter = 2.05;
-
-  String _selectedFuelType = 'Budi MADANI (Budi95)';
-
-  final Map<String, double> _fuelPresets = {
-    'Budi MADANI (Budi95)': 1.99,
-    'RON95': 4.02,
-    'RON97': 4.90,
-    'Diesel': 5.17,
-    'Custom': 0.0,
-  };
+  /// Locally-tracked entries used by the History and Insights tabs.
+  /// When [RefuelLogScreen.entriesOverride] is non-null this list is
+  /// initialised from the override; otherwise it is populated from the
+  /// Firestore stream and grown by [_onSaved] callbacks from the Log
+  /// tab.
+  late List<RefuelEntry> _entries;
 
   @override
   void initState() {
     super.initState();
-    _priceController.text = _fuelPresets['Budi MADANI (Budi95)']!.toStringAsFixed(2);
+    _tabController = TabController(length: 3, vsync: this);
+    _store = widget.store ?? FirestoreRefuelLogStore();
+    _entries = widget.entriesOverride == null
+        ? <RefuelEntry>[]
+        : List<RefuelEntry>.of(widget.entriesOverride!);
   }
-
-  final List<Map<String, dynamic>> _history = [
-    {
-      'date': '10/05/2026',
-      'distanceKm': 420.0,
-      'liters': 28.0,
-      'pricePerLiter': 2.05,
-      'fuelType': 'RON95',
-      'efficiency': 15.0,
-      'cost': 57.40,
-    },
-    {
-      'date': '01/05/2026',
-      'distanceKm': 395.0,
-      'liters': 27.5,
-      'pricePerLiter': 2.05,
-      'fuelType': 'RON95',
-      'efficiency': 14.36,
-      'cost': 56.38,
-    }
-  ];
 
   @override
   void dispose() {
-    _distanceController.dispose();
-    _litersController.dispose();
-    _priceController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final kmPerLiter = VehicleInsights.kmPerLiter(
-      distanceKm: _distanceKm,
-      liters: _liters,
-    );
-    final litersPer100Km = VehicleInsights.litersPer100Km(
-      distanceKm: _distanceKm,
-      liters: _liters,
-    );
-    final totalCost = VehicleInsights.refuelCost(
-      liters: _liters,
-      pricePerLiter: _pricePerLiter,
-    );
-    final costPerKm = _distanceKm <= 0 ? 0 : totalCost / _distanceKm;
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [
-                  const Color(0xFF0F172A), // Deep Slate Dark
-                  const Color(0xFF022C22), // Deep Obsidian Dark Green
-                ]
-              : [
-                  const Color(0xFFEFFDF5), // Soft pastel mint
-                  const Color(0xFFF9FAFB), // Soft premium grey
-                ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Refuel Log', style: TextStyle(fontWeight: FontWeight.bold))),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Fuel Efficiency Calculator',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : const Color(0xFF1F2937),
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _distanceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Distance since last refuel (km)',
-                        prefixIcon: Icon(Icons.route_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _litersController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Fuel added (liters)',
-                        prefixIcon: Icon(Icons.local_gas_station_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _selectedFuelType,
-                      decoration: const InputDecoration(
-                        labelText: 'Fuel Type Preset',
-                        prefixIcon: Icon(Icons.category_outlined),
-                      ),
-                      items: _fuelPresets.keys.map((type) {
-                        return DropdownMenuItem(value: type, child: Text(type));
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _selectedFuelType = val;
-                            if (val != 'Custom') {
-                              _priceController.text = _fuelPresets[val]!.toStringAsFixed(2);
-                            }
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _priceController,
-                      keyboardType: TextInputType.number,
-                      onChanged: (_) {
-                        // If user edits manually, set to custom
-                        if (_selectedFuelType != 'Custom') {
-                          setState(() => _selectedFuelType = 'Custom');
-                        }
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Fuel price (RM/liter)',
-                        prefixIcon: Icon(Icons.payments_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _calculate,
-                            icon: const Icon(Icons.calculate_outlined),
-                            label: const Text('Calculate Efficiency'),
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size(0, 48),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _findNearbyGasStations,
-                            icon: const Icon(Icons.map_outlined),
-                            label: const Text('Find Nearby Pump'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, 48),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _ResultTile(
-              icon: Icons.speed_outlined,
-              title: 'Efficiency',
-              value: '${kmPerLiter.toStringAsFixed(1)} km/L',
-            ),
-            _ResultTile(
-              icon: Icons.analytics_outlined,
-              title: 'Consumption',
-              value: '${litersPer100Km.toStringAsFixed(1)} L/100km',
-            ),
-            _ResultTile(
-              icon: Icons.payments_outlined,
-              title: 'Cost Analysis',
-              value: 'RM ${totalCost.toStringAsFixed(2)} total • RM ${costPerKm.toStringAsFixed(2)}/km',
-            ),
-            const SizedBox(height: 16),
-            EcoInsightsCard(kmPerLiter: kmPerLiter),
-            const SizedBox(height: 16),
-            FuelChart(
-              dataPoints: _history
-                  .map((h) => (h['efficiency'] as num).toDouble())
-                  .toList()
-                  .reversed
-                  .toList(),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Refuel History Log',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.white : const Color(0xFF1F2937),
-                    letterSpacing: -0.2,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            if (_history.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text('No previous refuel logs found.'),
-                ),
-              )
-            else
-              for (final entry in _history)
-                Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: entry['fuelType'] == 'Budi MADANI (Budi95)' 
-                              ? Colors.blue.shade100 
-                              : Theme.of(context).colorScheme.primaryContainer,
-                          child: Icon(
-                            Icons.local_gas_station,
-                            color: entry['fuelType'] == 'Budi MADANI (Budi95)' 
-                                ? Colors.blue.shade700 
-                                : Theme.of(context).colorScheme.primary,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    'RM ${(entry['cost'] as double).toStringAsFixed(2)}  •  ${(entry['liters'] as double).toStringAsFixed(1)} L',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                          color: isDark ? Colors.white : const Color(0xFF1F2937),
-                                          letterSpacing: -0.2,
-                                        ),
-                                  ),
-                                  if (entry['fuelType'] == 'Budi MADANI (Budi95)') ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: Colors.blue.shade200),
-                                      ),
-                                      child: Text(
-                                        'Budi95',
-                                        style: TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.blue.shade700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Icon(Icons.flash_on, size: 12, color: Theme.of(context).colorScheme.primary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${(entry['efficiency'] as double).toStringAsFixed(1)} km/L',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: Theme.of(context).colorScheme.primary,
-                                        ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Icon(Icons.calendar_today, size: 11, color: Colors.grey),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    entry['date'],
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: Colors.grey,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '${(entry['distanceKm'] as double).toStringAsFixed(0)} km',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    color: isDark ? Colors.white70 : Colors.black87,
-                                    letterSpacing: -0.5,
-                                  ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'INTERVAL',
-                              style: TextStyle(
-                                fontSize: 8,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _calculate() {
-    final dist = double.tryParse(_distanceController.text) ?? 0;
-    final ltr = double.tryParse(_litersController.text) ?? 0;
-    final price = double.tryParse(_priceController.text) ?? 0;
-
-    if (dist <= 0 || ltr <= 0 || price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid numeric parameters.')),
-      );
-      return;
-    }
-
-    final eff = VehicleInsights.kmPerLiter(distanceKm: dist, liters: ltr);
-    final cost = VehicleInsights.refuelCost(liters: ltr, pricePerLiter: price);
-    final now = DateTime.now();
-    final dateStr = '${now.day}/${now.month}/${now.year}';
-
+  void _onSaved(RefuelEntry entry) {
     setState(() {
-      _distanceKm = dist;
-      _liters = ltr;
-      _pricePerLiter = price;
-
-      _history.insert(0, {
-        'date': dateStr,
-        'distanceKm': dist,
-        'liters': ltr,
-        'pricePerLiter': price,
-        'fuelType': _selectedFuelType,
-        'efficiency': eff,
-        'cost': cost,
-      });
+      _entries = <RefuelEntry>[entry, ..._entries];
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Fuel efficiency calculated and saved!')),
-    );
-
-    // Save to Cloud Firestore
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      _saveRefuelLogCloud(user.uid, dateStr, dist, ltr, price, _selectedFuelType, eff, cost);
-    }
-  }
-
-  Future<void> _findNearbyGasStations() async {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _NearbyGasStationsSheet(),
-    );
-  }
-
-  Future<void> _saveRefuelLogCloud(
-    String uid,
-    String dateStr,
-    double dist,
-    double ltr,
-    double price,
-    String fuelType,
-    double eff,
-    double cost,
-  ) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('refuel_logs')
-          .add({
-        'distanceKm': dist,
-        'liters': ltr,
-        'pricePerLiter': price,
-        'fuelType': fuelType,
-        'efficiency': eff,
-        'cost': cost,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint('Firestore refuel log save error: $e');
-    }
-  }
-}
-
-class _NearbyGasStationsSheet extends StatefulWidget {
-  @override
-  State<_NearbyGasStationsSheet> createState() => _NearbyGasStationsSheetState();
-}
-
-class _NearbyGasStationsSheetState extends State<_NearbyGasStationsSheet> {
-  List<Workshop> _gasStations = [];
-  bool _isLoading = true;
-  double _radius = 5.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _search();
-  }
-
-  Future<void> _search() async {
-    setState(() => _isLoading = true);
-    try {
-      final pos = await Geolocator.getCurrentPosition();
-      final results = await GoogleMapsService.searchNearbyWorkshops(
-        LatLng(pos.latitude, pos.longitude),
-        _radius,
-        includedTypes: ['gas_station'],
-      );
-
-      setState(() {
-        _gasStations = results.map((json) {
-          final w = Workshop.fromGooglePlace(json);
-          final dist = Geolocator.distanceBetween(
-            pos.latitude, pos.longitude,
-            w.location!.latitude, w.location!.longitude,
-          );
-          return Workshop(
-            id: w.id,
-            name: w.name,
-            address: w.address,
-            rating: w.rating,
-            reviewCount: w.reviewCount,
-            location: w.location,
-            isGooglePlace: true,
-            distance: '${(dist / 1000).toStringAsFixed(1)} km',
-            types: w.types,
-            isOpenNow: w.isOpenNow,
-          );
-        }).toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('Gas Station Search Error: $e');
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F172A) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(2),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Refuel',
+          style: typography.headline.copyWith(color: colors.foreground),
+        ),
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(48 + spacing.sm),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.lg,
+              vertical: spacing.sm,
             ),
-          ),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Nearby Fuel Pumps',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                ),
-                Text(
-                  '${_radius.toInt()} km',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor),
-                ),
+            child: TabBar(
+              controller: _tabController,
+              labelStyle: typography.title,
+              labelColor: colors.emerald500,
+              unselectedLabelColor: colors.foreground
+                  .withValues(alpha: colors.surfaceProminent),
+              indicatorColor: colors.emerald500,
+              tabs: const <Widget>[
+                Tab(text: 'Log'),
+                Tab(text: 'History'),
+                Tab(text: 'Insights'),
               ],
             ),
           ),
-          Slider(
-            value: _radius,
-            min: 1.0,
-            max: 20.0,
-            divisions: 19,
-            onChanged: (val) => setState(() => _radius = val),
-            onChangeEnd: (_) => _search(),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _gasStations.isEmpty
-                    ? const Center(child: Text('No fuel pumps found nearby.'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: _gasStations.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final station = _gasStations[index];
-                          return Card(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: CircleAvatar(
-                                backgroundColor: primaryColor.withOpacity(0.1),
-                                child: Icon(Icons.local_gas_station, color: primaryColor),
-                              ),
-                              title: Text(station.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('${station.distance} • ${station.address}', maxLines: 1, overflow: TextOverflow.ellipsis),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.directions, color: Colors.blue),
-                                onPressed: () async {
-                                  final lat = station.location!.latitude;
-                                  final lng = station.location!.longitude;
-                                  final url = Uri.parse('google.navigation:q=$lat,$lng');
-                                  if (await canLaunchUrl(url)) {
-                                    await launchUrl(url);
-                                  }
-                                },
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => WorkshopDetailScreen(workshop: station),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResultTile extends StatelessWidget {
-  const _ResultTile({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: isDark ? Colors.white : const Color(0xFF1F2937),
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
+      body: widget.entriesOverride != null
+          ? _buildTabs(_entries)
+          : _buildStreamingTabs(),
+    );
+  }
+
+  /// Stream-driven body used in production. Subscribes to the user's
+  /// `refuel_logs` collection ordered by `date` descending and pipes
+  /// the result into the History and Insights tabs. The Log tab
+  /// always renders regardless of stream state because saving does
+  /// not require the stream snapshot.
+  Widget _buildStreamingTabs() {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      // No signed-in user → render with an empty list so the empty
+      // state surfaces and the Log tab still allows saving.
+      return _buildTabs(_entries);
+    }
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('refuel_logs')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+      ) {
+        final List<RefuelEntry> remoteEntries = snapshot.hasData
+            ? snapshot.data!.docs
+                .map(_entryFromDoc)
+                .whereType<RefuelEntry>()
+                .toList(growable: false)
+            : const <RefuelEntry>[];
+        // Merge in-memory optimistic entries with remote ones — the
+        // optimistic entry will be replaced by the remote copy on
+        // the next stream tick.
+        final List<RefuelEntry> all = <RefuelEntry>[
+          ..._entries,
+          ...remoteEntries,
+        ];
+        return _buildTabs(all);
+      },
+    );
+  }
+
+  Widget _buildTabs(List<RefuelEntry> entries) {
+    return TabBarView(
+      controller: _tabController,
+      children: <Widget>[
+        LogTab(store: _store, onSaved: _onSaved),
+        HistoryTab(entries: entries),
+        InsightsTab(entries: entries),
+      ],
+    );
+  }
+
+  /// Map a Firestore doc into a typed [RefuelEntry]. Returns `null`
+  /// when the doc is malformed so the streaming branch silently
+  /// drops bad rows rather than crashing the screen.
+  static RefuelEntry? _entryFromDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final Map<String, dynamic> data = doc.data();
+    final num? distance = data['distanceKm'] as num?;
+    final num? liters = data['liters'] as num?;
+    final num? price = data['pricePerLiter'] as num?;
+    final String? fuelType = data['fuelType'] as String?;
+    if (distance == null ||
+        liters == null ||
+        price == null ||
+        fuelType == null) {
+      return null;
+    }
+    DateTime date;
+    final Timestamp? ts = data['date'] as Timestamp?;
+    if (ts != null) {
+      date = ts.toDate();
+    } else {
+      final Timestamp? legacyTs = data['timestamp'] as Timestamp?;
+      if (legacyTs != null) {
+        date = legacyTs.toDate();
+      } else {
+        return null;
+      }
+    }
+    return RefuelEntry(
+      date: date,
+      distanceKm: distance.toDouble(),
+      liters: liters.toDouble(),
+      pricePerLiter: price.toDouble(),
+      fuelType: fuelType,
+      station: data['station'] as String?,
     );
   }
 }
-
