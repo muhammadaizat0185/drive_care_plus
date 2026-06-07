@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'journey_database.dart';
 import 'location_tracker.dart';
-import 'google_maps_service.dart';
 
 class ActivityRecognitionService {
   static final ActivityRecognitionService instance = ActivityRecognitionService._init();

@@ -2,6 +2,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../core/theme/color_utils.dart';
 import '../services/car_database.dart';
 import '../services/vehicle_insights.dart';
 import '../widgets/car_health_overlay.dart';
@@ -19,6 +20,33 @@ class VehicleScreen extends StatefulWidget {
  class _VehicleScreenState extends State<VehicleScreen> {
   final _carouselScrollController = ScrollController();
   final Set<String> _selectedMaintenanceItems = {};
+
+  Widget _cardContainer({
+    required Widget child,
+    required bool isDark,
+    Color? backgroundColor,
+    BoxBorder? border,
+    EdgeInsetsGeometry? padding,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor ?? (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
+        borderRadius: BorderRadius.circular(24),
+        border: border ?? Border.all(color: Colors.grey.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(20),
+        child: child,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -155,22 +183,7 @@ class VehicleScreen extends StatefulWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [
-                  const Color(0xFF0F172A), // Deep Slate Dark
-                  const Color(0xFF022C22), // Deep Obsidian Dark Green
-                ]
-              : [
-                  const Color(0xFFEFFDF5), // Soft pastel mint
-                  const Color(0xFFF9FAFB), // Soft premium grey
-                ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+    return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(title: const Text('Vehicle Profile', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -195,157 +208,139 @@ class VehicleScreen extends StatefulWidget {
                 const SizedBox(height: 16),
   
                 // Primary Active Vehicle Details Specifications Card
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    side: BorderSide(
-                      color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Specifications',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                  ),
-                            ),
-                            Row(
-                              children: [
-                                IconButton.filledTonal(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const VehicleCustomizerScreen()),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.palette_outlined, size: 20),
-                                  tooltip: 'Customize Look',
+                _cardContainer(
+                  isDark: isDark,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Specifications',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.5,
                                 ),
-                                const SizedBox(width: 8),
-                                IconButton.filledTonal(
-                                  onPressed: _showEditVehicleDialog,
-                                  icon: const Icon(Icons.edit_note, size: 20),
-                                  tooltip: 'Edit Specifications',
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _specTile(Icons.directions_car_outlined, 'Model', insights.model),
-                        _specTile(Icons.pin_outlined, 'Plate number', insights.plate),
-                        _specTile(Icons.speed_outlined, 'Current mileage', '${insights.currentMileageKm.toStringAsFixed(0)} km'),
-                        _specTile(Icons.local_gas_station_outlined, 'Fuel type', insights.fuelType),
-                        
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12.0),
-                          child: Divider(),
-                        ),
-                        
-                        Text(
-                          'Manufacturer Specifications',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: primaryColor,
-                                letterSpacing: 0.5,
+                          ),
+                          Row(
+                            children: [
+                              IconButton.filledTonal(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const VehicleCustomizerScreen()),
+                                  );
+                                },
+                                icon: const Icon(Icons.palette_outlined, size: 20),
+                                tooltip: 'Customize Look',
                               ),
-                        ),
-                        const SizedBox(height: 12),
-                        _specTile(Icons.settings_suggest_outlined, 'Engine', insights.engine),
-                        _specTile(Icons.settings_input_component_outlined, 'Transmission', insights.transmission),
-                        _specTile(Icons.local_gas_station, 'Fuel Tank Capacity', '${insights.fuelCapacityLiters.toStringAsFixed(0)} Liters'),
-                        _specTile(Icons.tire_repair_outlined, 'Recommended Tyre Pressure', '${insights.recommendedTyrePressurePsi.toStringAsFixed(0)} PSI'),
-                        _specTile(Icons.opacity_outlined, 'Engine Oil Capacity', '${insights.engineOilCapacityLiters.toStringAsFixed(1)} Liters'),
-                      ],
-                    ),
+                              const SizedBox(width: 8),
+                              IconButton.filledTonal(
+                                onPressed: _showEditVehicleDialog,
+                                icon: const Icon(Icons.edit_note, size: 20),
+                                tooltip: 'Edit Specifications',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _specTile(Icons.directions_car_outlined, 'Model', insights.model),
+                      _specTile(Icons.pin_outlined, 'Plate number', insights.plate),
+                      _specTile(Icons.speed_outlined, 'Current mileage', '${insights.currentMileageKm.toStringAsFixed(0)} km'),
+                      _specTile(Icons.local_gas_station_outlined, 'Fuel type', insights.fuelType),
+                      
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12.0),
+                        child: Divider(),
+                      ),
+                      
+                      Text(
+                        'Manufacturer Specifications',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: primaryColor,
+                              letterSpacing: 0.5,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      _specTile(Icons.settings_suggest_outlined, 'Engine', insights.engine),
+                      _specTile(Icons.settings_input_component_outlined, 'Transmission', insights.transmission),
+                      _specTile(Icons.local_gas_station, 'Fuel Tank Capacity', '${insights.fuelCapacityLiters.toStringAsFixed(0)} Liters'),
+                      _specTile(Icons.tire_repair_outlined, 'Recommended Tyre Pressure', '${insights.recommendedTyrePressurePsi.toStringAsFixed(0)} PSI'),
+                      _specTile(Icons.opacity_outlined, 'Engine Oil Capacity', '${insights.engineOilCapacityLiters.toStringAsFixed(1)} Liters'),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
   
                 // Predictive Maintenance List (Watchlist)
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    side: BorderSide(
-                      color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Service Watchlist',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                  ),
+                _cardContainer(
+                  isDark: isDark,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Service Watchlist',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.5,
+                                ),
+                          ),
+                          if (_selectedMaintenanceItems.isNotEmpty)
+                            TextButton.icon(
+                              onPressed: () => _logBatchMaintenance(insights),
+                              icon: const Icon(Icons.fact_check, size: 18),
+                              label: Text('Log (${_selectedMaintenanceItems.length})'),
+                              style: TextButton.styleFrom(foregroundColor: primaryColor),
                             ),
-                            if (_selectedMaintenanceItems.isNotEmpty)
-                              TextButton.icon(
-                                onPressed: () => _logBatchMaintenance(insights),
-                                icon: const Icon(Icons.fact_check, size: 18),
-                                label: Text('Log (${_selectedMaintenanceItems.length})'),
-                                style: TextButton.styleFrom(foregroundColor: primaryColor),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ...insights.watchlistItems.map((item) {
-                          final isSelected = _selectedMaintenanceItems.contains(item.name);
-                          Color statusColor;
-                          if (item.status == 'Red') {
-                            statusColor = Colors.red;
-                          } else if (item.status == 'Yellow') {
-                            statusColor = Colors.orange;
-                          } else {
-                            statusColor = Colors.green;
-                          }
-  
-                          return CheckboxListTile(
-                            value: isSelected,
-                            onChanged: (val) {
-                              setState(() {
-                                if (val == true) {
-                                  _selectedMaintenanceItems.add(item.name);
-                                } else {
-                                  _selectedMaintenanceItems.remove(item.name);
-                                }
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            activeColor: primaryColor,
-                            title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Due in ${item.remainingKm.toStringAsFixed(0)} km', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('Predicted Due: ${item.predictedDateStr}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                              ],
-                            ),
-                            secondary: Container(
-                              width: 4,
-                              height: 40,
-                              decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(2)),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...insights.watchlistItems.map((item) {
+                        final isSelected = _selectedMaintenanceItems.contains(item.name);
+                        Color statusColor;
+                        if (item.status == 'Red') {
+                          statusColor = Colors.red;
+                        } else if (item.status == 'Yellow') {
+                          statusColor = Colors.orange;
+                        } else {
+                          statusColor = Colors.green;
+                        }
+
+                        return CheckboxListTile(
+                          value: isSelected,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedMaintenanceItems.add(item.name);
+                              } else {
+                                _selectedMaintenanceItems.remove(item.name);
+                              }
+                            });
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: primaryColor,
+                          title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Due in ${item.remainingKm.toStringAsFixed(0)} km', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                              Text('Predicted Due: ${item.predictedDateStr}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                            ],
+                          ),
+                          secondary: Container(
+                            width: 4,
+                            height: 40,
+                            decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(2)),
+                          ),
+                        );
+                      }),
+                    ],
                   ),
                 ),
               ],
@@ -437,21 +432,21 @@ class VehicleScreen extends StatefulWidget {
                     decoration: BoxDecoration(
                       color: isActive
                           ? primaryColor.withOpacity(0.1)
-                          : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                          : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isActive ? primaryColor : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05)),
+                        color: isActive ? primaryColor : Colors.grey.withOpacity(0.1),
                         width: isActive ? 2 : 1,
                       ),
-                      boxShadow: isActive
-                          ? [
-                              BoxShadow(
-                                color: primaryColor.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              )
-                            ]
-                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: isActive
+                              ? primaryColor.withOpacity(0.1)
+                              : Colors.black.withOpacity(0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
@@ -571,102 +566,92 @@ class VehicleScreen extends StatefulWidget {
     final brakesVal = getHealth('brake');
     final tiresVal = getHealth('tyre');
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Diagnostic Health Profile',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                      ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                  child: const Text('LIVE', style: TextStyle(color: Colors.green, fontSize: 8, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            // "Liquid Glass" Car Health Overlay
-            Center(
-              child: CarHealthOverlay(
-                carType: insights.carType,
-                watchlist: watchlist,
+    return _cardContainer(
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Diagnostic Health Profile',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: const Text('LIVE', style: TextStyle(color: Colors.green, fontSize: 8, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // "Liquid Glass" Car Health Overlay
+          Center(
+            child: CarHealthOverlay(
+              carType: insights.carType,
+              watchlist: watchlist,
             ),
-            const SizedBox(height: 32),
-            // Squircle Liquid Gauges
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                LiquidSquircleGauge(value: engineVal, color: const Color(0xFF10B981), label: 'Engine Oil'),
-                LiquidSquircleGauge(value: brakesVal, color: Colors.orange, label: 'Brakes'),
-                LiquidSquircleGauge(value: tiresVal, color: Colors.blue, label: 'Tires'),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 32),
+          // Squircle Liquid Gauges
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              LiquidSquircleGauge(value: engineVal, color: const Color(0xFF10B981), label: 'Engine Oil'),
+              LiquidSquircleGauge(value: brakesVal, color: Colors.orange, label: 'Brakes'),
+              LiquidSquircleGauge(value: tiresVal, color: Colors.blue, label: 'Tires'),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildMileageCard(BuildContext context, VehicleInsights insights) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    return Card(
-      elevation: 0,
-      color: primaryColor.withOpacity(0.05),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: primaryColor.withOpacity(0.1))),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(Icons.speed, color: primaryColor),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return _cardContainer(
+      isDark: isDark,
+      backgroundColor: primaryColor.withOpacity(0.05),
+      border: Border.all(color: primaryColor.withOpacity(0.1)),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), shape: BoxShape.circle),
+            child: Icon(Icons.speed, color: primaryColor),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Current Odometer', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                Text('${insights.currentMileageKm.toStringAsFixed(0)} KM', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -1)),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Current Odometer', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-                  Text('${insights.currentMileageKm.toStringAsFixed(0)} KM', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -1)),
-                ],
-              ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => _showMileageUpdateDialog(insights),
+            icon: const Icon(Icons.edit, size: 12),
+            label: const Text('Update', style: TextStyle(fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              elevation: 0,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            ElevatedButton.icon(
-              onPressed: () => _showMileageUpdateDialog(insights),
-              icon: const Icon(Icons.edit, size: 12),
-              label: const Text('Update', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 0,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

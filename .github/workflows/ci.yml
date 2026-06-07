@@ -1,0 +1,57 @@
+name: CI
+
+# CI workflow for DriveCare+.
+#
+# Reference_Source guard (Requirement 15): the `dart run tool/reference_source_guard.dart`
+# step runs BEFORE `flutter analyze`, `flutter test`, and `flutter build` so that any leak
+# of `UI Improvement Suggestion/` into Dart imports, asset bundle entries, or runtime path
+# strings fails the pipeline before downstream steps execute.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Analyze, Guard, Test, Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Print Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Reference_Source guard MUST run before `flutter analyze`, `flutter test`,
+      # and `flutter build` so a leaked import or asset path fails fast.
+      - name: Reference_Source guard
+        run: dart run tool/reference_source_guard.dart
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test --no-pub
+
+      - name: Build (Android APK, debug)
+        run: flutter build apk --debug --no-pub
