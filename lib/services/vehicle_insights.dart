@@ -63,7 +63,6 @@ class VehicleInsights extends ChangeNotifier {
   List<Map<String, dynamic>> get activeBookings => _bookings;
 
   List<MaintenanceItem> get watchlistItems {
-    final now = DateTime.now();
     return [
       _createItem('Engine Oil', 10000),
       _createItem('Brake Pads', 40000),

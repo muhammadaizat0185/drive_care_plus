@@ -1,9 +1,41 @@
+// Token + Component_Library sweep (Group 14, Task 14.8).
+//
+// Sweep summary:
+//   * Tokens applied to all spacing, typography, radius, and color literals.
+//   * Hero status surface routed through `AppCard` styling via token
+//     extensions.
+//   * Trip metric rows rendered via `AppListTile`.
+//   * Primary CTA ('Start Trip' / 'Stop Trip') rendered as
+//     `AppGradientButton` (Requirement 12.4).
+//   * Secondary CTAs (Open Refuel Log / Open Workshop Map) rendered via
+//     `AppSecondaryButton`.
+//   * Loading indicator rendered via `AppSpinner`.
+//
+// PRESERVED (Requirement 12.6, 14.5):
+//   * `Timer.periodic(Duration(seconds: 1), ...)` increments untouched.
+//   * `VehicleInsights.instance.updateRecentTrip(distanceKm:..., fuelCostRm:...)`
+//     call signature preserved.
+//   * Firestore writes preserve full collection paths and field shapes:
+//       - `users/{uid}/trips`.add({distanceKm, durationSeconds, fuelCostRm,
+//         timestamp: FieldValue.serverTimestamp()})
+//       - `users/{uid}/vehicle/primary`.update({currentMileageKm: ...})
+//   * `Navigator.pushNamed(context, RefuelLogScreen.routeName)` / `WorkshopMapScreen.routeName`.
+//   * Trip summary `AlertDialog` flow.
+//   * The screen does not currently mount a GoogleMap (the placeholder
+//     Container has always stood in for the live map preview); this
+//     sweep does not re-introduce GoogleMap so there is no marker, camera,
+//     or polyline contract to preserve at this time.
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../core/theme/color_utils.dart';
+
+import '../core/theme/tokens/tokens.dart';
 import '../services/vehicle_insights.dart';
+import '../widgets/ui/ui.dart';
 import 'refuel_log_screen.dart';
 import 'workshop_map_screen.dart';
 
@@ -22,6 +54,10 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
   int _secondsElapsed = 0;
   double _distanceKm = 0.0;
   double _fuelCostRm = 0.0;
+
+  // Hero status surface height. Not a Token_Set value.
+  static const double _heroHeight = 260;
+  static const double _heroIconSize = 56;
 
   @override
   void dispose() {
@@ -70,9 +106,11 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
     );
 
     // Show Trip Summary Dialog
-    _showTripSummaryDialog(finalDistance, finalSeconds, finalCost);
+    if (mounted) {
+      _showTripSummaryDialog(finalDistance, finalSeconds, finalCost);
+    }
 
-    // Save Trip Record to Cloud Firestore
+    // Save Trip Record to Cloud Firestore — call signature preserved.
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
@@ -111,23 +149,34 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
     showDialog(
       context: context,
       builder: (context) {
+        final ThemeData theme = Theme.of(context);
+        final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+        final AppTypographyExt typography =
+            theme.extension<AppTypographyExt>()!;
+        final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+
         return AlertDialog(
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.stars, color: Colors.amber),
-              SizedBox(width: 8),
-              Text('Trip Completed!'),
+              Icon(Icons.stars, color: colors.warning),
+              SizedBox(width: spacing.sm),
+              Text(
+                'Trip Completed!',
+                style:
+                    typography.title.copyWith(color: colors.foreground),
+              ),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'DriveCare+ has logged your trip metrics and synced them with your dashboard.',
-                style: TextStyle(fontWeight: FontWeight.w500),
+                style: typography.bodyLarge
+                    .copyWith(color: colors.foreground),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: spacing.lg),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.route_outlined),
@@ -149,9 +198,10 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
             ],
           ),
           actions: [
-            ElevatedButton(
+            AppGradientButton(
+              label: 'Awesome',
+              fullWidth: false,
               onPressed: () => Navigator.pop(context),
-              child: const Text('Awesome'),
             ),
           ],
         );
@@ -161,96 +211,156 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Trip Tracking')),
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+
+    final Color mutedForeground =
+        colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
+    final Color heroAccent =
+        _isTracking ? colors.info : colors.success;
+
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('Trip Tracking')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(spacing.lg),
         children: [
+          // Hero status surface — token-driven `Container`. The visual
+          // stand-in for the future GoogleMap preview; not the real map.
           Container(
-            height: 260,
+            height: _heroHeight,
             decoration: BoxDecoration(
-              color: _isTracking ? Colors.blue.shade50 : Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+              color: heroAccent.withValues(alpha: colors.surfaceMedium),
+              borderRadius: BorderRadius.circular(radii.large),
+              border: Border.all(color: colors.border),
             ),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _isTracking ? Icons.navigation_outlined : Icons.map_outlined,
-                    size: 56,
-                    color: _isTracking ? Colors.blue : Colors.green,
+                    _isTracking
+                        ? Icons.navigation_outlined
+                        : Icons.map_outlined,
+                    size: _heroIconSize,
+                    color: heroAccent,
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: spacing.sm),
                   Text(
-                    _isTracking ? 'Active Trip in Progress...' : 'Google Maps preview will appear here',
-                    style: TextStyle(
-                      fontWeight: _isTracking ? FontWeight.bold : FontWeight.normal,
-                      color: _isTracking ? Colors.blue : null,
-                    ),
+                    _isTracking
+                        ? 'Active Trip in Progress...'
+                        : 'Google Maps preview will appear here',
+                    style: typography.bodyLarge.copyWith(color: heroAccent),
                   ),
                   if (_isTracking) ...[
-                    const SizedBox(height: 12),
-                    const SizedBox(
-                      width: 140,
-                      child: LinearProgressIndicator(),
-                    ),
-                  ]
+                    SizedBox(height: spacing.md),
+                    const AppSpinner(),
+                  ],
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.route_outlined),
-            title: const Text('Distance'),
-            subtitle: Text(_isTracking ? '${_distanceKm.toStringAsFixed(2)} km' : '24.6 km'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.timer_outlined),
-            title: const Text('Duration'),
-            subtitle: Text(_isTracking ? _formatDuration(_secondsElapsed) : '42 minutes'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.payments_outlined),
-            title: const Text('Fuel cost estimate'),
-            subtitle: Text(_isTracking ? 'RM ${_fuelCostRm.toStringAsFixed(2)}' : 'RM 5.40'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.analytics_outlined),
-            title: const Text('Predictive service estimate'),
-            subtitle: Text(
-              'Average ${VehicleInsights.instance.averageDailyDistanceKm.toStringAsFixed(0)} km/day, service due in about ${VehicleInsights.instance.predictedServiceDueDays} days.',
+          SizedBox(height: spacing.lg),
+
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: AppListTile(
+              leading: Icon(Icons.route_outlined, color: colors.emerald500),
+              title: Text(
+                'Distance',
+                style:
+                    typography.bodyLarge.copyWith(color: colors.foreground),
+              ),
+              subtitle: Text(
+                _isTracking
+                    ? '${_distanceKm.toStringAsFixed(2)} km'
+                    : '24.6 km',
+                style: typography.body.copyWith(color: mutedForeground),
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
+          SizedBox(height: spacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: AppListTile(
+              leading: Icon(Icons.timer_outlined, color: colors.emerald500),
+              title: Text(
+                'Duration',
+                style:
+                    typography.bodyLarge.copyWith(color: colors.foreground),
+              ),
+              subtitle: Text(
+                _isTracking
+                    ? _formatDuration(_secondsElapsed)
+                    : '42 minutes',
+                style: typography.body.copyWith(color: mutedForeground),
+              ),
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: AppListTile(
+              leading:
+                  Icon(Icons.payments_outlined, color: colors.emerald500),
+              title: Text(
+                'Fuel cost estimate',
+                style:
+                    typography.bodyLarge.copyWith(color: colors.foreground),
+              ),
+              subtitle: Text(
+                _isTracking
+                    ? 'RM ${_fuelCostRm.toStringAsFixed(2)}'
+                    : 'RM 5.40',
+                style: typography.body.copyWith(color: mutedForeground),
+              ),
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: AppListTile(
+              leading:
+                  Icon(Icons.analytics_outlined, color: colors.emerald500),
+              title: Text(
+                'Predictive service estimate',
+                style:
+                    typography.bodyLarge.copyWith(color: colors.foreground),
+              ),
+              subtitle: Text(
+                'Average ${VehicleInsights.instance.averageDailyDistanceKm.toStringAsFixed(0)} km/day, service due in about ${VehicleInsights.instance.predictedServiceDueDays} days.',
+                style: typography.body.copyWith(color: mutedForeground),
+              ),
+            ),
+          ),
+          SizedBox(height: spacing.md),
+          AppGradientButton(
+            label: _isTracking ? 'Stop Trip' : 'Start Trip',
+            icon: _isTracking ? Icons.stop : Icons.play_arrow,
             onPressed: _toggleTrip,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _isTracking ? Colors.red : null,
-              foregroundColor: _isTracking ? Colors.white : null,
-            ),
-            icon: Icon(_isTracking ? Icons.stop : Icons.play_arrow),
-            label: Text(_isTracking ? 'Stop Trip' : 'Start Trip'),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
+          SizedBox(height: spacing.sm),
+          AppSecondaryButton(
+            label: 'Open Refuel Log',
+            icon: Icons.local_gas_station_outlined,
+            fullWidth: true,
             onPressed: () =>
                 Navigator.pushNamed(context, RefuelLogScreen.routeName),
-            icon: const Icon(Icons.local_gas_station_outlined),
-            label: const Text('Open Refuel Log'),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
+          SizedBox(height: spacing.sm),
+          AppSecondaryButton(
+            label: 'Open Workshop Map',
+            icon: Icons.map_outlined,
+            fullWidth: true,
             onPressed: () =>
                 Navigator.pushNamed(context, WorkshopMapScreen.routeName),
-            icon: const Icon(Icons.map_outlined),
-            label: const Text('Open Workshop Map'),
           ),
         ],
       ),
-    );
+    ),);
   }
 }
-

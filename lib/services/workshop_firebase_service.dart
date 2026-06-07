@@ -108,7 +108,6 @@ class WorkshopFirebaseService {
               .toList(),
         );
   }
-
   /// Cancels a booking by setting its status to 'Cancelled'.
   Future<void> cancelBooking(String bookingId) async {
     await _firestore.collection('bookings').doc(bookingId).update(<String, Object>{

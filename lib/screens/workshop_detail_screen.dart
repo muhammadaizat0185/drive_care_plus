@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/theme/color_utils.dart';
 import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/workshop_firebase_service.dart';
@@ -144,68 +145,54 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _currentWorkshop.name.isEmpty ? 'Workshop Details' : _currentWorkshop.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _launchNavigation,
-            icon: const Icon(Icons.directions),
-            tooltip: 'Navigate',
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
           ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // Background Gradient
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0xFF0F172A), const Color(0xFF022C22)]
-                    : [const Color(0xFFF8FAFC), const Color(0xFFF1F5F9)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+          title: Text(
+            _currentWorkshop.name.isEmpty ? 'Workshop Details' : _currentWorkshop.name,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          actions: [
+            IconButton(
+              onPressed: _launchNavigation,
+              icon: const Icon(Icons.directions),
+              tooltip: 'Navigate',
             ),
-          ),
-          // Content
-          ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-            children: [
-              _buildHeaderCard(isDark, primaryColor),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          children: [
+            _buildHeaderCard(isDark, primaryColor),
+            const SizedBox(height: 20),
+            
+            if (_isLoadingDetails)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else ...[
+              _buildInfoSection(isDark, primaryColor),
               const SizedBox(height: 20),
-              
-              if (_isLoadingDetails)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(40.0),
-                    child: CircularProgressIndicator(),
-                  ),
-                )
-              else ...[
-                _buildInfoSection(isDark, primaryColor),
+              if (!_currentWorkshop.isGasStation && !_currentWorkshop.isCarWash) ...[
+                _buildBookingSection(isDark, primaryColor),
                 const SizedBox(height: 20),
-                if (!_currentWorkshop.isGasStation && !_currentWorkshop.isCarWash) ...[
-                  _buildBookingSection(isDark, primaryColor),
-                  const SizedBox(height: 20),
-                ],
-                _buildReviewSection(isDark, primaryColor),
               ],
+              _buildReviewSection(isDark, primaryColor),
             ],
-          ),
-        ],
+          ],
+        ),
+        bottomNavigationBar: (_currentWorkshop.isGasStation || _currentWorkshop.isCarWash || !_showBookingSetup)
+            ? null 
+            : _buildBottomActionBar(primaryColor, isDark),
       ),
-      bottomNavigationBar: (_currentWorkshop.isGasStation || _currentWorkshop.isCarWash || !_showBookingSetup)
-          ? null 
-          : _buildBottomActionBar(primaryColor, isDark),
     );
   }
 

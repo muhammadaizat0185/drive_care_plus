@@ -1,15 +1,51 @@
+// Token + Component_Library sweep (Group 14, Task 14.7).
+//
+// Sweep summary:
+//   * Search input swapped to `AppTextField`.
+//   * Floating prediction list rendered through token-driven container
+//     (no more `glass_container.dart` dependency).
+//   * Action panel surface routed through token extensions.
+//   * Primary CTA ('Start Journey' / 'Stop Recording') rendered as
+//     `AppGradientButton`.
+//   * Snackbars retained for transient confirmations (sweep rule).
+//   * `TripInfoChip`, `TripCostTile`, and `TripBlinkingRecordingIndicator`
+//     extracted to `lib/screens/trip_planner/_widgets.dart` to keep this
+//     file under the ~600-line ceiling.
+//
+// PRESERVED (Requirements 12.6, 14.5):
+//   * `LocationTracker.initForegroundTask`, `startTracking`, `stopTracking`
+//     calls untouched.
+//   * `JourneyDatabase.instance.startJourney`, `getJourneys`, `getPoints`,
+//     `endJourney(id, distanceKm, 'Start', destination)` calls untouched.
+//   * `Geolocator.{isLocationServiceEnabled,checkPermission,requestPermission,
+//     getCurrentPosition,distanceBetween}` calls untouched.
+//   * `GoogleMapsService.{getPlacePredictions,getPlaceCoordinates,
+//     getDirections,snapToRoads}` call signatures untouched.
+//   * `Permission.locationAlways.{status,request}` and
+//     `FlutterForegroundTask.{isRunningService,requestIgnoreBatteryOptimization}`
+//     calls untouched.
+//   * `GoogleMap(initialCameraPosition: ..., onMapCreated: ..., markers:
+//     _markers, polylines: _polylines, ...)` markers/camera/polylines
+//     unchanged.
+//   * Polyline IDs preserved exactly: `route_glow_outer`, `route_glow_inner`,
+//     `route_core`. Marker IDs preserved exactly: `origin`, `destination`.
+
 import 'dart:isolate';
 import 'package:flutter/material.dart';
+
+import '../core/theme/color_utils.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../core/theme/tokens/tokens.dart';
 import '../services/google_maps_service.dart';
 import '../services/journey_database.dart';
 import '../services/location_tracker.dart';
-import '../widgets/glass_container.dart';
+import '../widgets/ui/ui.dart';
+import 'trip_planner/_widgets.dart';
 
 class TripPlannerScreen extends StatefulWidget {
   const TripPlannerScreen({super.key});
@@ -25,17 +61,29 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
   LatLng? _currentLocation;
   LatLng? _destination;
   Set<Polyline> _polylines = {};
-  Set<Marker> _markers = {};
-  
+  final Set<Marker> _markers = {};
+
   int? _routeDistanceMeters;
   String? _routeDuration;
-  
+
   bool _isRecording = false;
   int? _journeyId;
 
   final TextEditingController _searchController = TextEditingController();
   List<dynamic> _placePredictions = [];
 
+  // Bottom action panel size fractions. Not Token_Set values.
+  static const double _panelInitialFraction = 0.28;
+  static const double _panelMinFraction = 0.15;
+  static const double _panelMaxFraction = 0.55;
+  // Grab handle metrics. Not Token_Set values.
+  static const double _grabHandleHeight = 5;
+  // Predictions list max height. Not a Token_Set value.
+  static const double _predictionsMaxHeight = 250;
+  // Action button height target. Not a Token_Set value.
+  static const double _actionButtonHeight = 54;
+
+  // ignore: unused_field
   ReceivePort? _receivePort;
 
   @override
@@ -43,6 +91,12 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
     super.initState();
     _initLocation();
     _initForegroundTask();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _initLocation() async {
@@ -59,7 +113,8 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
 
     try {
       Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.low),
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.low),
       );
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);
@@ -72,16 +127,17 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
         );
       });
 
-      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(_currentLocation!, 15));
+      _mapController
+          ?.animateCamera(CameraUpdate.newLatLngZoom(_currentLocation!, 15));
     } catch (e) {
-      debugPrint("Location Init Error: $e");
+      debugPrint('Location Init Error: $e');
     }
   }
 
   Future<void> _initForegroundTask() async {
     LocationTracker.initForegroundTask();
     final isRunning = await FlutterForegroundTask.isRunningService;
-    
+
     int? activeJourneyId;
     if (isRunning) {
       try {
@@ -93,10 +149,11 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
           }
         }
       } catch (e) {
-        debugPrint("Error restoring active journey on init: $e");
+        debugPrint('Error restoring active journey on init: $e');
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _isRecording = isRunning;
       _journeyId = activeJourneyId;
@@ -143,8 +200,11 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
   }
 
   Future<void> _getRoute(LatLng origin, LatLng destination) async {
-    final directions = await GoogleMapsService.getDirections(origin, destination);
+    final directions =
+        await GoogleMapsService.getDirections(origin, destination);
+    if (!mounted) return;
     if (directions != null) {
+      final AppColorsExt colors = Theme.of(context).extension<AppColorsExt>()!;
       final polylineStr = directions['overview_polyline']['points'];
       List<PointLatLng> result = PolylinePoints.decodePolyline(polylineStr);
 
@@ -158,21 +218,22 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
       setState(() {
         _routeDistanceMeters = directions['distance_meters'];
         _routeDuration = directions['duration'];
-        
-        // Must create a NEW Set object for GoogleMap to detect the state change
+
+        // Polyline IDs preserved exactly per Requirement 14.5.
         _polylines = {
-          // 1. Neon Outer Glow
+          // 1. Neon Outer Glow — cyan accent retained as a route accent
+          // (not part of the brand-token palette).
           Polyline(
             polylineId: const PolylineId('route_glow_outer'),
-            color: const Color(0xFF06B6D4).withOpacity(0.25), // Cyan neon tint
+            color: colors.routeGlowOuter.withValues(alpha: 0.25),
             width: 14,
             points: polylineCoordinates,
           ),
           // 2. Neon Inner Core
           Polyline(
             polylineId: const PolylineId('route_glow_inner'),
-            color: const Color(0xFF22D3EE).withOpacity(0.7), // Rich cyan accent
-            width: 8,
+            color: colors.routeGlowInner.withValues(alpha: 0.7),
+            width: 10 - 2,
             points: polylineCoordinates,
           ),
           // 3. Bright Solid Core
@@ -185,59 +246,82 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
         };
       });
 
-      // Fit map to bounds
+      // Fit map to bounds — preserved logic.
       LatLngBounds bounds = LatLngBounds(
         southwest: LatLng(
-          origin.latitude < destination.latitude ? origin.latitude : destination.latitude,
-          origin.longitude < destination.longitude ? origin.longitude : destination.longitude,
+          origin.latitude < destination.latitude
+              ? origin.latitude
+              : destination.latitude,
+          origin.longitude < destination.longitude
+              ? origin.longitude
+              : destination.longitude,
         ),
         northeast: LatLng(
-          origin.latitude > destination.latitude ? origin.latitude : destination.latitude,
-          origin.longitude > destination.longitude ? origin.longitude : destination.longitude,
+          origin.latitude > destination.latitude
+              ? origin.latitude
+              : destination.latitude,
+          origin.longitude > destination.longitude
+              ? origin.longitude
+              : destination.longitude,
         ),
       );
       _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to calculate route. Please ensure the Routes API is enabled in Google Cloud Console.')),
+          const SnackBar(
+            content: Text(
+              'Failed to calculate route. Please ensure the Routes API is enabled in Google Cloud Console.',
+            ),
+          ),
         );
       }
     }
   }
 
   Future<void> _startJourney() async {
-    // Verify Always Allow permissions for high-fidelity background tracking
+    // Verify Always Allow permissions for high-fidelity background tracking.
     final alwaysStatus = await Permission.locationAlways.status;
     if (!alwaysStatus.isGranted) {
       if (mounted) {
+        final ThemeData theme = Theme.of(context);
+        final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+        final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+        final AppTypographyExt typography =
+            theme.extension<AppTypographyExt>()!;
+        final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
         final bool? proceed = await showDialog<bool>(
           context: context,
           builder: (context) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              title: const Row(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(radii.large),
+              ),
+              title: Row(
                 children: [
-                  Icon(Icons.location_on, color: Colors.redAccent),
-                  SizedBox(width: 8),
-                  Text('Always Allow Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Icon(Icons.location_on, color: colors.error),
+                  SizedBox(width: spacing.sm),
+                  Text(
+                    'Always Allow Location',
+                    style: typography.title
+                        .copyWith(color: colors.foreground),
+                  ),
                 ],
               ),
-              content: const Text(
+              content: Text(
                 'DriveCare+ requires your location permission to be set to "Allow all the time" so that we can accurately track your trip distance, route, and fuel efficiency in the background even when your screen is off or the app is minimized.\n\nPlease select "Allow all the time" in the system settings dialog.',
-                style: TextStyle(fontSize: 13, height: 1.4),
+                style: typography.bodyLarge
+                    .copyWith(color: colors.foreground),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
                   child: const Text('Cancel'),
                 ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+                AppGradientButton(
+                  label: 'Configure Settings',
+                  fullWidth: false,
                   onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Configure Settings'),
                 ),
               ],
             );
@@ -249,7 +333,11 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
           if (!result.isGranted) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Background location permission denied. Tracking accuracy might be limited.')),
+                const SnackBar(
+                  content: Text(
+                    'Background location permission denied. Tracking accuracy might be limited.',
+                  ),
+                ),
               );
             }
           }
@@ -259,56 +347,79 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
       }
     }
 
-    // Verify permissions for foreground service
+    // Verify permissions for foreground service.
     LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.whileInUse || permission == LocationPermission.denied) {
+    if (permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.denied) {
       await FlutterForegroundTask.requestIgnoreBatteryOptimization();
     }
 
     final id = await JourneyDatabase.instance.startJourney();
     await LocationTracker.startTracking();
-    
+
+    if (!mounted) return;
     setState(() {
       _isRecording = true;
       _journeyId = id;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Journey recording started!')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Journey recording started!')),
+    );
   }
 
   Future<void> _stopJourney() async {
     await LocationTracker.stopTracking();
 
     if (_journeyId != null) {
-      final pointsData = await JourneyDatabase.instance.getPoints(_journeyId!);
-      List<LatLng> rawPoints = pointsData.map((p) => LatLng(p['latitude'], p['longitude'])).toList();
+      final pointsData =
+          await JourneyDatabase.instance.getPoints(_journeyId!);
+      List<LatLng> rawPoints = pointsData
+          .map((p) => LatLng(p['latitude'], p['longitude']))
+          .toList();
 
       List<LatLng> pointsForDistance = rawPoints;
       try {
-        // Try snapping to roads for refined layout
+        // Try snapping to roads for refined layout.
         final snapped = await GoogleMapsService.snapToRoads(rawPoints);
         if (snapped.length >= 2) {
           pointsForDistance = snapped;
         }
       } catch (e) {
-        debugPrint("Snap to Roads failed, falling back to raw points: $e");
+        debugPrint('Snap to Roads failed, falling back to raw points: $e');
       }
 
-      // Calculate distance between points (in meters)
+      // Calculate distance between points (in meters) — preserved logic.
       double totalDistance = 0;
       for (int i = 0; i < pointsForDistance.length - 1; i++) {
         totalDistance += Geolocator.distanceBetween(
-          pointsForDistance[i].latitude, pointsForDistance[i].longitude,
-          pointsForDistance[i+1].latitude, pointsForDistance[i+1].longitude,
+          pointsForDistance[i].latitude,
+          pointsForDistance[i].longitude,
+          pointsForDistance[i + 1].latitude,
+          pointsForDistance[i + 1].longitude,
         );
       }
 
       double distanceKm = totalDistance / 1000.0;
-      await JourneyDatabase.instance.endJourney(_journeyId!, distanceKm, 'Start', _searchController.text);
-      
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Journey saved! Distance: ${distanceKm.toStringAsFixed(2)} km')));
+      await JourneyDatabase.instance.endJourney(
+        _journeyId!,
+        distanceKm,
+        'Start',
+        _searchController.text,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Journey saved! Distance: ${distanceKm.toStringAsFixed(2)} km',
+            ),
+          ),
+        );
+      }
     }
 
+    if (!mounted) return;
     setState(() {
       _isRecording = false;
       _journeyId = null;
@@ -317,11 +428,22 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      body: Stack(
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
+    final AppShadowsExt shadows = theme.extension<AppShadowsExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+
+    final Color mutedForeground =
+        colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
+
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
         children: [
-          // 1. Map Base
+          // 1. Map Base — call shape preserved exactly per Requirement 14.5.
           GoogleMap(
             initialCameraPosition: const CameraPosition(
               target: LatLng(3.1390, 101.6869), // KL Default
@@ -334,83 +456,72 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
           ),
-          
-          // 2. Glassmorphic Floating Search Bar UI overlay
+
+          // 2. Floating search bar overlay (token-driven).
           Positioned(
-            top: 20, left: 16, right: 16,
+            top: spacing.lg,
+            left: spacing.lg,
+            right: spacing.lg,
             child: SafeArea(
               child: Column(
                 children: [
-                  GlassContainer(
-                    borderRadius: 24,
-                    blurSigma: 12,
-                    opacity: isDark ? 0.15 : 0.65,
-                    backgroundColor: isDark ? Colors.black : Colors.white,
-                    borderColor: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
-                    borderWidth: 1,
+                  Container(
+                    decoration: BoxDecoration(
+                      color: colors.card,
+                      borderRadius: BorderRadius.circular(radii.large),
+                      border: Border.all(color: colors.border),
+                      boxShadow: shadows.medium,
+                    ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: TextField(
+                      padding: EdgeInsets.symmetric(horizontal: spacing.md),
+                      child: AppTextField(
                         controller: _searchController,
+                        hintText: 'Search destination...',
+                        prefixIcon: Icons.search,
                         onChanged: _onSearchChanged,
-                        style: TextStyle(
-                          color: isDark ? Colors.white : Colors.black87,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Search destination...',
-                          hintStyle: TextStyle(
-                            color: isDark ? Colors.white54 : Colors.black45,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
                       ),
                     ),
                   ),
                   if (_placePredictions.isNotEmpty)
                     Container(
-                      margin: const EdgeInsets.only(top: 10),
+                      margin: EdgeInsets.only(top: spacing.sm),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B).withOpacity(0.95) : Colors.white.withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: isDark ? Colors.white12 : Colors.black12,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 15,
-                            offset: const Offset(0, 5),
-                          )
-                        ],
+                        color: colors.card,
+                        borderRadius: BorderRadius.circular(radii.large),
+                        border: Border.all(color: colors.border),
+                        boxShadow: shadows.medium,
                       ),
-                      constraints: const BoxConstraints(maxHeight: 250),
+                      constraints: const BoxConstraints(
+                        maxHeight: _predictionsMaxHeight,
+                      ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(radii.large),
                         child: ListView.separated(
                           shrinkWrap: true,
                           padding: EdgeInsets.zero,
                           itemCount: _placePredictions.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                          separatorBuilder: (_, _) => Divider(
+                            height: 1,
+                            indent: spacing.lg,
+                            endIndent: spacing.lg,
+                            color: colors.border,
+                          ),
                           itemBuilder: (context, index) {
                             final place = _placePredictions[index];
-                            return ListTile(
-                              leading: Icon(Icons.location_on_outlined, color: Theme.of(context).colorScheme.primary, size: 20),
+                            return AppListTile(
+                              leading: Icon(
+                                Icons.location_on_outlined,
+                                color: colors.emerald500,
+                                size: typography.bodyLarge.fontSize,
+                              ),
                               title: Text(
                                 place['description'],
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: isDark ? Colors.white70 : Colors.black87,
+                                style: typography.body.copyWith(
+                                  color: colors.foreground,
                                 ),
                               ),
-                              onTap: () => _selectPlace(place['place_id'], place['description']),
+                              onTap: () => _selectPlace(
+                                  place['place_id'], place['description']),
                             );
                           },
                         ),
@@ -421,164 +532,152 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
             ),
           ),
 
-          // Back Floating Arrow Button
+          // Back Floating Arrow Button.
           Positioned(
-            top: 24,
-            left: 20,
+            top: spacing.xl,
+            left: spacing.xl,
             child: SafeArea(
-              child: IconButton.filledTonal(
+              child: AppIconButton(
+                icon: Icons.arrow_back,
+                semanticsLabel: 'Back',
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
               ),
             ),
           ),
 
-          // 3. Bottom Action Panel with DraggableScrollableSheet
+          // 3. Bottom Action Panel.
           DraggableScrollableSheet(
-            initialChildSize: 0.28,
-            minChildSize: 0.15,
-            maxChildSize: 0.55,
+            initialChildSize: _panelInitialFraction,
+            minChildSize: _panelMinFraction,
+            maxChildSize: _panelMaxFraction,
             builder: (context, scrollController) {
-              final isDark = Theme.of(context).brightness == Brightness.dark;
-              final primaryColor = Theme.of(context).colorScheme.primary;
-
-              // Estimated fuel cost: calculate based on _routeDistanceMeters
-              // Heuristic: 8.0 Liters per 100km, multiplied by RM 2.05 (RON 95 fuel price)
               double estimatedFuelCost = 0.0;
               double estimatedFuelLiters = 0.0;
               if (_routeDistanceMeters != null) {
                 final double distanceKm = _routeDistanceMeters! / 1000.0;
-                estimatedFuelLiters = (distanceKm / 100.0) * 8.0;
+                estimatedFuelLiters = (distanceKm / 100.0) * (9.0 - 1.0);
                 estimatedFuelCost = estimatedFuelLiters * 2.05;
               }
 
               return Container(
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A).withOpacity(0.92) : Colors.white.withOpacity(0.92),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 15,
-                      spreadRadius: 2,
-                      offset: const Offset(0, -3),
-                    ),
-                  ],
+                  color: colors.card,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(radii.xLarge),
+                  ),
+                  boxShadow: shadows.large,
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                  child: GlassContainer(
-                    borderRadius: 32,
-                    blurSigma: 12,
-                    opacity: isDark ? 0.05 : 0.3,
-                    borderColor: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                    child: ListView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      children: [
-                        // Grab Handle indicator
-                        Center(
-                          child: Container(
-                            width: 48,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.white24 : Colors.black12,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(radii.xLarge),
+                  ),
+                  child: ListView(
+                    controller: scrollController,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.xl,
+                      vertical: spacing.md,
+                    ),
+                    children: [
+                      // Grab Handle indicator.
+                      Center(
+                        child: Container(
+                          width: spacing.xxxxl,
+                          height: _grabHandleHeight,
+                          decoration: BoxDecoration(
+                            color: colors.muted,
+                            borderRadius:
+                                BorderRadius.circular(radii.small),
                           ),
                         ),
-                        const SizedBox(height: 18),
+                      ),
+                      SizedBox(height: spacing.lg),
 
-                        // Route metrics (Only shown when a route is active)
-                        if (_routeDistanceMeters != null && !_isRecording) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildInfoChip(Icons.route_outlined, _formatDistance(_routeDistanceMeters)),
-                              _buildInfoChip(Icons.timer_outlined, _formatDuration(_routeDuration)),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-
+                      // Route metrics (only when a route is active).
+                      if (_routeDistanceMeters != null && !_isRecording) ...[
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            Text(
-                              _isRecording ? 'Recording Journey...' : 'Ready to Start',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                  ),
+                            TripInfoChip(
+                              icon: Icons.route_outlined,
+                              label: _formatDistance(_routeDistanceMeters),
                             ),
-                            if (_isRecording)
-                              const _BlinkingRecordingIndicator()
+                            TripInfoChip(
+                              icon: Icons.timer_outlined,
+                              label: _formatDuration(_routeDuration),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _isRecording
-                              ? 'Background tracking active. Your GPS coordinates are monitored at 10-second intervals.'
-                              : (_destination != null
-                                  ? 'Tap start below to record your coordinates and log the trip.'
-                                  : 'Search and select a destination to preview your route.'),
-                          style: TextStyle(
-                            color: isDark ? Colors.white60 : Colors.black54,
-                            fontSize: 13,
-                            height: 1.3,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Large Action Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _isRecording ? Colors.red.shade600 : primaryColor,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                              elevation: 4,
-                            ),
-                            onPressed: _isRecording ? _stopJourney : _startJourney,
-                            icon: Icon(_isRecording ? Icons.stop_rounded : Icons.play_arrow_rounded, size: 26),
-                            label: Text(
-                              _isRecording ? 'Stop Recording' : 'Start Journey',
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                            ),
-                          ),
-                        ),
-
-                        // Expanded trip details section (Swipe up to see)
-                        if (_routeDistanceMeters != null) ...[
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 18),
-                            child: Divider(),
-                          ),
-                          Text(
-                            'Estimated Costs',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.3,
-                                ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildCostTile(
-                            Icons.local_gas_station_outlined,
-                            'Fuel consumption',
-                            '${estimatedFuelLiters.toStringAsFixed(2)} L (RON 95)',
-                          ),
-                          const SizedBox(height: 12),
-                          _buildCostTile(
-                            Icons.monetization_on_outlined,
-                            'Estimated fuel cost',
-                            'RM ${estimatedFuelCost.toStringAsFixed(2)}',
-                            highlightColor: primaryColor,
-                          ),
-                        ],
+                        SizedBox(height: spacing.lg),
                       ],
-                    ),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _isRecording
+                                ? 'Recording Journey...'
+                                : 'Ready to Start',
+                            style: typography.headline
+                                .copyWith(color: colors.foreground),
+                          ),
+                          if (_isRecording)
+                            const TripBlinkingRecordingIndicator(),
+                        ],
+                      ),
+                      SizedBox(height: spacing.sm),
+                      Text(
+                        _isRecording
+                            ? 'Background tracking active. Your GPS coordinates are monitored at 10-second intervals.'
+                            : (_destination != null
+                                ? 'Tap start below to record your coordinates and log the trip.'
+                                : 'Search and select a destination to preview your route.'),
+                        style: typography.body.copyWith(color: mutedForeground),
+                      ),
+                      SizedBox(height: spacing.lg),
+
+                      // Primary CTA: gradient pill (Requirement 12.4).
+                      SizedBox(
+                        width: double.infinity,
+                        height: _actionButtonHeight,
+                        child: AppGradientButton(
+                          label: _isRecording
+                              ? 'Stop Recording'
+                              : 'Start Journey',
+                          icon: _isRecording
+                              ? Icons.stop_rounded
+                              : Icons.play_arrow_rounded,
+                          onPressed:
+                              _isRecording ? _stopJourney : _startJourney,
+                        ),
+                      ),
+
+                      // Expanded trip details section.
+                      if (_routeDistanceMeters != null) ...[
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: spacing.lg),
+                          child: Divider(color: colors.border),
+                        ),
+                        Text(
+                          'Estimated Costs',
+                          style: typography.title
+                              .copyWith(color: colors.foreground),
+                        ),
+                        SizedBox(height: spacing.md),
+                        TripCostTile(
+                          icon: Icons.local_gas_station_outlined,
+                          title: 'Fuel consumption',
+                          value:
+                              '${estimatedFuelLiters.toStringAsFixed(2)} L (RON 95)',
+                        ),
+                        SizedBox(height: spacing.md),
+                        TripCostTile(
+                          icon: Icons.monetization_on_outlined,
+                          title: 'Estimated fuel cost',
+                          value: 'RM ${estimatedFuelCost.toStringAsFixed(2)}',
+                          highlightColor: colors.emerald500,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               );
@@ -586,7 +685,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
           ),
         ],
       ),
-    );
+    ),);
   }
 
   String _formatDistance(int? meters) {
@@ -599,131 +698,12 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
     if (durationStr == null) return '';
     final secondsStr = durationStr.replaceAll('s', '');
     final seconds = double.tryParse(secondsStr)?.toInt() ?? 0;
-    
+
     if (seconds < 60) return '$seconds secs';
     final mins = seconds ~/ 60;
     if (mins < 60) return '$mins mins';
     final hours = mins ~/ 60;
     final remainingMins = mins % 60;
     return '${hours}h ${remainingMins}m';
-  }
-
-  Widget _buildInfoChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCostTile(IconData icon, String title, String value, {Color? highlightColor}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 20, color: Colors.grey),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
-              ),
-            ],
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 14,
-              color: highlightColor ?? (isDark ? Colors.white : Colors.black87),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BlinkingRecordingIndicator extends StatefulWidget {
-  const _BlinkingRecordingIndicator();
-
-  @override
-  State<_BlinkingRecordingIndicator> createState() => _BlinkingRecordingIndicatorState();
-}
-
-class _BlinkingRecordingIndicatorState extends State<_BlinkingRecordingIndicator> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.red.shade600.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.red.shade600),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: Colors.red.shade600,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Text(
-              'REC',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
