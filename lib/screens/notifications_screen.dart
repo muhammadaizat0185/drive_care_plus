@@ -12,6 +12,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import '../widgets/ui/ui.dart';
 
@@ -36,8 +38,10 @@ class NotificationsScreen extends StatelessWidget {
     final Color mutedForeground =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('Notifications')),
       body: ListView(
         padding: EdgeInsets.all(spacing.lg),
         children: [
@@ -79,6 +83,6 @@ class NotificationsScreen extends StatelessWidget {
           ],
         ],
       ),
-    );
+    ),);
   }
 }

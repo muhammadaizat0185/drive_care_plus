@@ -21,6 +21,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../core/theme/color_utils.dart';
 import '../core/theme/tokens/tokens.dart';
 import '../widgets/ui/ui.dart';
 
@@ -110,38 +111,40 @@ class _ToyyibPayWebViewScreenState extends State<ToyyibPayWebViewScreen> {
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      appBar: AppBar(
-        title: Text(
-          'ToyyibPay FPX Payment',
-          style: typography.title.copyWith(color: colors.foreground),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(
+            'ToyyibPay FPX Payment',
+            style: typography.title.copyWith(color: colors.foreground),
+          ),
+          leading: AppIconButton(
+            icon: Icons.arrow_back,
+            semanticsLabel: 'Cancel payment',
+            onPressed: () => _confirmCancel(context),
+          ),
         ),
-        leading: AppIconButton(
-          icon: Icons.arrow_back,
-          semanticsLabel: 'Cancel payment',
-          onPressed: () => _confirmCancel(context),
-        ),
-      ),
-      body: Stack(
-        children: [
-          // WebView Widget — controller untouched.
-          WebViewWidget(controller: _controller),
-
-          // Loading indicator at the very top of the webview chrome.
-          if (_isLoading)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(
-                value: _loadingProgress > 0 ? _loadingProgress : null,
-                color: colors.emerald500,
-                backgroundColor: colors.muted,
-                minHeight: spacing.xs,
+        body: Stack(
+          children: [
+            // WebView Widget — controller untouched.
+            WebViewWidget(controller: _controller),
+  
+            // Loading indicator at the very top of the webview chrome.
+            if (_isLoading)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  value: _loadingProgress > 0 ? _loadingProgress : null,
+                  color: colors.emerald500,
+                  backgroundColor: colors.muted,
+                  minHeight: spacing.xs,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

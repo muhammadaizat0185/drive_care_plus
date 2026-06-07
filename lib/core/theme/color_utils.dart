@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/painting.dart';
+import 'package:flutter/material.dart';
 
 import 'tokens/app_colors.dart';
 
@@ -177,4 +177,82 @@ double _channelToLinear(double c) {
     return c / 12.92;
   }
   return math.pow((c + 0.055) / 1.055, 2.4).toDouble();
+}
+
+/// Returns the dynamic dark mode gradient bottom color matching the user's active
+/// primary theme preset.
+///
+/// Mappings:
+/// - Emerald Green (0xFF1B8A5A) -> Color(0xFF022C22)
+/// - Mint Fresh (0xFF10B981) -> Color(0xFF022C1B)
+/// - Teal Ocean (0xFF0F766E) -> Color(0xFF042F2E)
+/// - Classic Blue (0xFF1E40AF) -> Color(0xFF0A1931)
+/// - Dark Charcoal (0xFF1F2937) -> Color(0xFF111827)
+/// - Berry Red (0xFFBE123C) -> Color(0xFF3B0712)
+/// - Nordic Steel (0xFF475569) -> Color(0xFF1E293B)
+///
+/// Returns Color(0xFF022C22) as fallback when a custom or undefined color is passed.
+Color darkGradientBottomColor(Color primary) {
+  switch (primary.value) {
+    case 0xFF1B8A5A: // Emerald Green
+      return const Color(0xFF022C22);
+    case 0xFF10B981: // Mint Fresh
+      return const Color(0xFF022C1B);
+    case 0xFF0F766E: // Teal Ocean
+      return const Color(0xFF042F2E);
+    case 0xFF1E40AF: // Classic Blue
+      return const Color(0xFF0A1931);
+    case 0xFF1F2937: // Dark Charcoal
+      return const Color(0xFF111827);
+    case 0xFFBE123C: // Berry Red
+      return const Color(0xFF3B0712);
+    case 0xFF475569: // Nordic Steel
+      return const Color(0xFF1E293B);
+    default:
+      return const Color(0xFF022C22);
+  }
+}
+
+/// A widget that wraps screens with the dynamic brand gradient background.
+///
+/// Under dark mode, the gradient smoothly transitions from Deep Slate Dark
+/// (#0F172A) at the top to a dynamic bottom color selected to match the user's
+/// active primary theme color preset.
+/// Under light mode, the gradient transitions from soft pastel mint (#EFFDF5)
+/// to soft premium grey (#F9FAFB).
+class AppBackground extends StatelessWidget {
+  const AppBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // Prevent duplicate backgrounds when screens are nested (e.g. inside HomeScreen tabs)
+    final hasAncestor = context.findAncestorWidgetOfExactType<AppBackground>() != null;
+    if (hasAncestor) {
+      return child;
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [
+                  const Color(0xFF0F172A), // Deep Slate Dark
+                  darkGradientBottomColor(primaryColor), // Curated Obsidian tone
+                ]
+              : [
+                  const Color(0xFFEFFDF5), // Soft pastel mint
+                  const Color(0xFFF9FAFB), // Soft premium grey
+                ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: child,
+    );
+  }
 }

@@ -45,8 +45,8 @@ void main() {
           expect(
             d.color,
             brightness == Brightness.light
-                ? AppColors.lightCard
-                : AppColors.darkCard,
+                ? Colors.white
+                : Colors.white.withOpacity(0.05),
           );
 
           // 1-px border in the neutral border token.
@@ -54,15 +54,13 @@ void main() {
           expect(border.top.width, 1.0);
           expect(
             border.top.color,
-            brightness == Brightness.light
-                ? AppColors.lightBorder
-                : AppColors.darkBorder,
+            Colors.grey.withOpacity(0.1),
           );
 
           // Large corner radius.
           expect(
             d.borderRadius,
-            BorderRadius.circular(AppRadii.large),
+            BorderRadius.circular(24),
           );
 
           // Shadow set is small at rest.

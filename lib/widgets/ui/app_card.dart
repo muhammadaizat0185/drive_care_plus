@@ -72,15 +72,22 @@ class AppCard extends StatelessWidget {
     final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
     final AppShadowsExt shadows = theme.extension<AppShadowsExt>()!;
 
-    final BorderRadius borderRadius = BorderRadius.circular(radii.large);
+    final bool isDark = theme.brightness == Brightness.dark;
+    final BorderRadius borderRadius = BorderRadius.circular(24);
     final EdgeInsetsGeometry resolvedPadding =
         padding ?? EdgeInsets.all(spacing.lg);
 
     final Decoration decoration = BoxDecoration(
-      color: colors.card,
+      color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
       borderRadius: borderRadius,
-      border: Border.all(color: colors.border, width: _borderWidth),
-      boxShadow: shadows.small,
+      border: Border.all(color: Colors.grey.withOpacity(0.1), width: _borderWidth),
+      boxShadow: <BoxShadow>[
+        BoxShadow(
+          color: Colors.black.withOpacity(0.02),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
     );
 
     // Static surface: no gesture, no splash. The surface itself owns the

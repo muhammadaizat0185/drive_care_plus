@@ -25,6 +25,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import '../core/util/in_flight_gate.dart';
 import '../services/profile_service.dart';
@@ -178,16 +180,17 @@ class _WalletHistoryScreenState extends State<WalletHistoryScreen>
       },
     );
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      appBar: AppBar(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
         title: Text(
           'Wallet',
           style: typography.headline.copyWith(color: colors.foreground),
         ),
       ),
       body: SafeArea(child: body),
-    );
+    ),);
   }
 
   Widget _buildBody({
@@ -337,20 +340,59 @@ class _HeroBalanceCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: spacing.sm),
-          Text(
-            walletCurrencyFormatter.format(balance),
-            key: const ValueKey<String>('wallet_hero_balance'),
-            style: typography.display.copyWith(color: Colors.white),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          SizedBox(height: spacing.lg),
-          AppGradientButton(
-            key: const ValueKey<String>('wallet_top_up_button'),
-            label: 'Top Up',
-            icon: Icons.add,
-            isLoading: isTopUpInFlight,
-            onPressed: isTopUpInFlight ? null : onTopUp,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  walletCurrencyFormatter.format(balance),
+                  key: const ValueKey<String>('wallet_hero_balance'),
+                  style: typography.display.copyWith(color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              GestureDetector(
+                key: const ValueKey<String>('wallet_top_up_button'),
+                onTap: isTopUpInFlight ? null : onTopUp,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: spacing.md,
+                    vertical: spacing.xs + 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(radii.medium),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (isTopUpInFlight)
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colors.emerald500,
+                          ),
+                        )
+                      else ...[
+                        Icon(Icons.add, color: colors.emerald500, size: 18),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Top Up',
+                          style: TextStyle(
+                            color: colors.emerald500,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

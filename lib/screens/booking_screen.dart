@@ -21,6 +21,8 @@
 //   * `WorkshopDetailScreen(workshop: workshop)` navigation unchanged.
 
 import 'package:flutter/material.dart';
+
+import '../core/theme/color_utils.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -41,17 +43,7 @@ class BookingScreen extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final AppColorsExt colors = theme.extension<AppColorsExt>()!;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colors.background,
-            colors.muted,
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+    return AppBackground(
       child: DefaultTabController(
         length: 2,
         child: Scaffold(
@@ -205,6 +197,7 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
     final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+    final bool isDark = theme.brightness == Brightness.dark;
 
     final Color mutedForeground =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
@@ -296,12 +289,21 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
                     color: isSelected
                         ? colors.emerald500
                             .withValues(alpha: colors.surfaceMedium)
-                        : colors.card,
-                    borderRadius: BorderRadius.circular(radii.large),
+                        : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
+                    borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: isSelected ? colors.emerald500 : colors.border,
+                      color: isSelected ? colors.emerald500 : Colors.grey.withOpacity(0.1),
                       width: isSelected ? 1.5 : 1.0,
                     ),
+                    boxShadow: isSelected
+                        ? null
+                        : <BoxShadow>[
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,

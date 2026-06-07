@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import '../core/util/in_flight_gate.dart';
 import '../widgets/ui/ui.dart';
@@ -272,8 +274,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
-    return Scaffold(
-      backgroundColor: colors.background,
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
       body: SafeArea(
         // [ListenableBuilder] rebuilds the form when [_signInGate]
         // notifies a state change so the gradient button's `isLoading`
@@ -459,6 +462,6 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         ),
       ),
-    );
+    ),);
   }
 }

@@ -24,6 +24,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import 'refuel/_widgets.dart';
 
@@ -91,8 +93,10 @@ class _RefuelLogScreenState extends State<RefuelLogScreen>
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
-    return Scaffold(
-      appBar: AppBar(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
         title: Text(
           'Refuel',
           style: typography.headline.copyWith(color: colors.foreground),
@@ -123,7 +127,7 @@ class _RefuelLogScreenState extends State<RefuelLogScreen>
       body: widget.entriesOverride != null
           ? _buildTabs(_entries)
           : _buildStreamingTabs(),
-    );
+    ),);
   }
 
   /// Stream-driven body used in production. Subscribes to the user's

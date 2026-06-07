@@ -17,6 +17,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import '../widgets/ui/ui.dart';
 import 'home_screen.dart';
@@ -108,7 +110,9 @@ class _SplashScreenState extends State<SplashScreen> {
     final Color mutedForeground =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
 
-    return Scaffold(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
       body: Center(
         child: Padding(
           padding: EdgeInsets.all(spacing.xl),
@@ -151,6 +155,6 @@ class _SplashScreenState extends State<SplashScreen> {
           ),
         ),
       ),
-    );
+    ),);
   }
 }

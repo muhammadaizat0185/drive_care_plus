@@ -32,6 +32,8 @@
 
 import 'dart:isolate';
 import 'package:flutter/material.dart';
+
+import '../core/theme/color_utils.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geolocator/geolocator.dart';
@@ -436,8 +438,10 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
     final Color mutedForeground =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
 
-    return Scaffold(
-      body: Stack(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
         children: [
           // 1. Map Base — call shape preserved exactly per Requirement 14.5.
           GoogleMap(
@@ -681,7 +685,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
           ),
         ],
       ),
-    );
+    ),);
   }
 
   String _formatDistance(int? meters) {

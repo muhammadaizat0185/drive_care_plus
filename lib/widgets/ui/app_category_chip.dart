@@ -61,8 +61,9 @@ class AppCategoryChip extends StatelessWidget {
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
     final AppRadiiExt radii = theme.extension<AppRadiiExt>()!;
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+    final bool isDark = theme.brightness == Brightness.dark;
 
-    final BorderRadius borderRadius = BorderRadius.circular(radii.medium);
+    final BorderRadius borderRadius = BorderRadius.circular(24);
 
     final Decoration decoration = selected
         ? BoxDecoration(
@@ -74,8 +75,16 @@ class AppCategoryChip extends StatelessWidget {
             borderRadius: borderRadius,
           )
         : BoxDecoration(
-            color: colors.muted,
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
             borderRadius: borderRadius,
+            border: Border.all(color: Colors.grey.withOpacity(0.1)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           );
 
     final Color foreground =

@@ -50,7 +50,9 @@ void main() {
       final BoxDecoration d =
           _decoratedRoot(tester).decoration! as BoxDecoration;
       expect(d.gradient, isNull);
-      expect(d.color, AppColors.lightMuted);
+      expect(d.color, Colors.white);
+      expect(d.border, isNotNull);
+      expect(d.boxShadow, isNotEmpty);
     });
 
     testWidgets('renders trailingPriceText when provided', (tester) async {

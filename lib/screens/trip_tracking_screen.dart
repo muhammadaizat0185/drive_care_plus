@@ -31,6 +31,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import '../services/vehicle_insights.dart';
 import '../widgets/ui/ui.dart';
@@ -220,8 +222,10 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
     final Color heroAccent =
         _isTracking ? colors.info : colors.success;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Trip Tracking')),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('Trip Tracking')),
       body: ListView(
         padding: EdgeInsets.all(spacing.lg),
         children: [
@@ -357,6 +361,6 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
           ),
         ],
       ),
-    );
+    ),);
   }
 }

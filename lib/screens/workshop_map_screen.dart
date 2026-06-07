@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../core/theme/color_utils.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -243,7 +245,9 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
 
-    return Scaffold(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Workshops'),
         bottom: PreferredSize(
@@ -290,7 +294,7 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
                 ),
               ],
             ),
-    );
+    ),);
   }
 }
 

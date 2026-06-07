@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 
+import '../core/theme/color_utils.dart';
 import '../services/profile_service.dart';
 import '../widgets/ui/ui.dart';
 import 'booking_screen.dart';
@@ -12,6 +13,7 @@ import 'settings_screen.dart';
 import 'trip_planner_screen.dart';
 import 'journey_log_screen.dart';
 import 'vehicle_screen.dart';
+import '../widgets/vehicle_health_gauge.dart';
 import 'wallet_history_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/onboarding_guide.dart';
@@ -96,94 +98,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final charcoalColor = isDark ? Colors.white : const Color(0xFF1F2937);
 
     // Point 2: Radial/Linear gradient background depth wrapper
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [
-                  const Color(0xFF0F172A), // Deep Slate Dark
-                  const Color(0xFF022C22), // Deep Obsidian Dark Green
-                ]
-              : [
-                  const Color(0xFFEFFDF5), // Soft pastel mint
-                  const Color(0xFFF9FAFB), // Soft premium grey
-                ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+    return AppBackground(
       child: Scaffold(
         extendBody: true,
         backgroundColor: Colors.transparent, // Allows underlying gradient to shine through!
-        // Keep main DriveCare+ appbar only on Cockpit tab
-        appBar: _currentIndex == 0
-            ? AppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                title: ListenableBuilder(
-                  listenable: ProfileService.instance,
-                  builder: (context, _) {
-                    final isPro = ProfileService.instance.isPro;
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'DriveCare+',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.8,
-                            color: charcoalColor,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            gradient: isPro
-                                ? const LinearGradient(
-                                    colors: [Color(0xFF00B894), Color(0xFF00CEC9)],
-                                  )
-                                : null,
-                            color: isPro ? null : Colors.grey.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isPro) ...[
-                                const Icon(Icons.verified, color: Colors.white, size: 12),
-                                const SizedBox(width: 4),
-                              ],
-                              Text(
-                                isPro ? 'PRO' : 'BASIC',
-                                style: TextStyle(
-                                  color: isPro ? Colors.white : Colors.grey,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                actions: [
-                  IconButton(
-                    onPressed: () => Navigator.pushNamed(context, NotificationsScreen.routeName),
-                    icon: Icon(Icons.notifications_outlined, color: charcoalColor),
-                    tooltip: 'Notifications',
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pushNamed(context, SettingsScreen.routeName),
-                    icon: Icon(Icons.settings_outlined, color: charcoalColor),
-                    tooltip: 'Settings',
-                  ),
-                ],
-              )
-            : null,
+        appBar: null,
         body: _tabs[_currentIndex],
         // Point 5: Floating Bottom Navigation Pill Shape sitting above the bottom edge
         bottomNavigationBar: SafeArea(
@@ -251,15 +170,85 @@ class _HomeCockpitBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: ListView(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final charcoalColor = isDark ? Colors.white : const Color(0xFF1F2937);
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: ListenableBuilder(
+          listenable: ProfileService.instance,
+          builder: (context, _) {
+            final isPro = ProfileService.instance.isPro;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'DriveCare+',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.8,
+                    color: charcoalColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: isPro
+                        ? const LinearGradient(
+                            colors: [Color(0xFF00B894), Color(0xFF00CEC9)],
+                          )
+                        : null,
+                    color: isPro ? null : Colors.grey.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isPro) ...[
+                        const Icon(Icons.verified, color: Colors.white, size: 12),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        isPro ? 'PRO' : 'BASIC',
+                        style: TextStyle(
+                          color: isPro ? Colors.white : Colors.grey,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.pushNamed(context, NotificationsScreen.routeName),
+            icon: Icon(Icons.notifications_outlined, color: charcoalColor),
+            tooltip: 'Notifications',
+          ),
+          IconButton(
+            onPressed: () => Navigator.pushNamed(context, SettingsScreen.routeName),
+            icon: Icon(Icons.settings_outlined, color: charcoalColor),
+            tooltip: 'Settings',
+          ),
+        ],
+      ),
+      body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 110),
         children: <Widget>[
           // Greeting Header — Requirements 4.1, 4.2.
           const GreetingHeader(),
           const SizedBox(height: 28),
           // Vehicle Health hero — Requirements 4.3, 4.4.
-          const VehicleHealthHero(),
+          const VehicleHealthGauge(),
           const SizedBox(height: 28),
           // Wallet (2/3) + Vault (1/3) row — Requirement 4.5.
           const WalletVaultRow(),

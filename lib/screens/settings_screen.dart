@@ -136,8 +136,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ThemeData theme = Theme.of(context);
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
 
-    return Scaffold(
-      appBar: AppBar(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
         title: const Text(
           'Settings',
           style: TextStyle(fontWeight: FontWeight.bold),
@@ -203,47 +205,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               // 1. PROFILE — avatar, name, phone, Save Profile (task 8.2).
               const AppSectionHeader(label: 'PROFILE'),
-              _ProfileSection(
-                nameController: _nameController,
-                phoneController: _phoneController,
-                saveGate: _saveGate,
-                nameError: _nameError,
-                phoneError: _phoneError,
-                onSavePressed: _onSavePressed,
-                onNameChanged: _onNameChanged,
-                onPhoneChanged: _onPhoneChanged,
-                onChangeAvatarPressed: _onChangeAvatarPressed,
+              AppCard(
+                child: _ProfileSection(
+                  nameController: _nameController,
+                  phoneController: _phoneController,
+                  saveGate: _saveGate,
+                  nameError: _nameError,
+                  phoneError: _phoneError,
+                  onSavePressed: _onSavePressed,
+                  onNameChanged: _onNameChanged,
+                  onPhoneChanged: _onPhoneChanged,
+                  onChangeAvatarPressed: _onChangeAvatarPressed,
+                ),
               ),
               SizedBox(height: spacing.xl),
 
               // 2. APPEARANCE — dark-mode toggle + swatch grid (task 8.5).
               const AppSectionHeader(label: 'APPEARANCE'),
-              const _AppearanceSection(),
+              const AppCard(
+                child: _AppearanceSection(),
+              ),
               SizedBox(height: spacing.xl),
 
               // 3. NOTIFICATIONS — three preference toggles (task 8.8).
               const AppSectionHeader(label: 'NOTIFICATIONS'),
-              const _NotificationsSection(),
+              const AppCard(
+                child: _NotificationsSection(),
+              ),
               SizedBox(height: spacing.xl),
 
               // 4. PRIVACY & SECURITY — list tiles (task 8.10).
               const AppSectionHeader(label: 'PRIVACY & SECURITY'),
-              _PrivacySecuritySection(onAction: _showComingSoon),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: _PrivacySecuritySection(onAction: _showComingSoon),
+              ),
               SizedBox(height: spacing.xl),
 
               // 5. DATA & STORAGE — list tiles (task 8.10).
               const AppSectionHeader(label: 'DATA & STORAGE'),
-              _DataStorageSection(onAction: _showComingSoon),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: _DataStorageSection(onAction: _showComingSoon),
+              ),
               SizedBox(height: spacing.xl),
 
               // 6. PREFERENCES — list tiles (task 8.10).
               const AppSectionHeader(label: 'PREFERENCES'),
-              _PreferencesSection(onAction: _showComingSoon),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: _PreferencesSection(onAction: _showComingSoon),
+              ),
               SizedBox(height: spacing.xl),
 
               // 7. ABOUT & SUPPORT — list tiles (task 8.10).
               const AppSectionHeader(label: 'ABOUT & SUPPORT'),
-              _AboutSupportSection(onAction: _showComingSoon),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: _AboutSupportSection(onAction: _showComingSoon),
+              ),
               SizedBox(height: spacing.xxl),
 
               // 8. Sign Out — full functionality wired in task 8.11.
@@ -258,7 +278,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         },
       ),
-    );
+    ),);
   }
 
   /// Clears the display-name validation error as soon as the user

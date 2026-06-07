@@ -24,6 +24,8 @@
 //     marker / camera / polyline contract unchanged.
 
 import 'package:flutter/material.dart';
+
+import '../core/theme/color_utils.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -139,8 +141,10 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
       }
     }
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Journey Logs'),
         backgroundColor: Colors.transparent,
@@ -302,7 +306,7 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
           ),
         ],
       ),
-    );
+    ),);
   }
 }
 

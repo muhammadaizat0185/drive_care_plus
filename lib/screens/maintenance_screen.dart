@@ -17,6 +17,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../core/theme/color_utils.dart';
 import 'package:lottie/lottie.dart';
 
 import '../core/theme/tokens/tokens.dart';
@@ -42,8 +44,10 @@ class MaintenanceScreen extends StatelessWidget {
     final Color mutedForeground =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Maintenance')),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('Maintenance')),
       body: ListenableBuilder(
         listenable: VehicleInsights.instance,
         builder: (context, child) {
@@ -180,7 +184,7 @@ class MaintenanceScreen extends StatelessWidget {
           );
         },
       ),
-    );
+    ),);
   }
 
   Future<void> _playMaintenanceAlert(

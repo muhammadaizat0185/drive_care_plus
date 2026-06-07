@@ -19,6 +19,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import '../services/vehicle_insights.dart';
 import '../widgets/ui/ui.dart';
@@ -88,8 +90,10 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
     final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
     final AppColorsExt colors = theme.extension<AppColorsExt>()!;
 
-    return Scaffold(
-      appBar: AppBar(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
         title: Text(
           'Vehicle style',
           style: typography.headline.copyWith(color: colors.foreground),
@@ -174,6 +178,6 @@ class _VehicleCustomizerScreenState extends State<VehicleCustomizerScreen> {
           ],
         ),
       ),
-    );
+    ),);
   }
 }

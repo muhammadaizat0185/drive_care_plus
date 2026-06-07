@@ -544,6 +544,10 @@ void main() {
       (tester) async {
         await _pumpSettings(tester);
 
+        // Scroll the list view down to make sure the bottom elements are built.
+        await tester.drag(find.byType(ListView), const Offset(0, -1000));
+        await tester.pumpAndSettle();
+
         // Find the Sign Out AppSecondaryButton at the bottom of the
         // scroll view and scroll it into view, then tap it.
         final Finder signOutFinder = find.byWidgetPredicate(
@@ -595,6 +599,10 @@ void main() {
       'navigating away',
       (tester) async {
         await _pumpSettings(tester);
+
+        // Scroll the list view down to make sure the bottom elements are built.
+        await tester.drag(find.byType(ListView), const Offset(0, -1000));
+        await tester.pumpAndSettle();
 
         final Finder signOutFinder = find.byWidgetPredicate(
           (Widget w) =>

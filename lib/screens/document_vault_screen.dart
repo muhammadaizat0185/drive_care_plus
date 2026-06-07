@@ -22,6 +22,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../core/theme/color_utils.dart';
+
 import '../core/theme/tokens/tokens.dart';
 import '../core/util/search_filter.dart';
 import '../core/util/single_select_controller.dart';
@@ -135,9 +137,10 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
       },
     );
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      appBar: AppBar(
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
         title: Text(
           'Document Vault',
           style: typography.headline.copyWith(color: colors.foreground),
@@ -150,7 +153,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
         backgroundColor: colors.emerald500,
         child: const Icon(Icons.add, color: Colors.white),
       ),
-    );
+    ),);
   }
 
   Widget _buildBody(List<VaultDocument> filtered, AppSpacingExt spacing) {
