@@ -8,6 +8,7 @@ import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/workshop_firebase_service.dart';
 import '../services/vehicle_insights.dart';
+import '../services/notification_service.dart';
 import '../widgets/star_rating.dart';
 import '../widgets/rating_form_dialog.dart';
 
@@ -773,10 +774,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     };
 
     try {
-      await _firebaseService.createBooking(bookingData);
+      final String bookingId = await _firebaseService.createBooking(bookingData);
       
       // Sync with local VehicleInsights for the classic booking screen.
       final localBookingData = {
+        'id': bookingId,
         'workshopId': _currentWorkshop.id,
         'workshopName': _currentWorkshop.name,
         'serviceName': _selectedServiceType,
@@ -787,6 +789,13 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         'status': 'Pending',
       };
       await VehicleInsights.instance.addBooking(localBookingData);
+
+      // Fire booking-confirmation notification (respects preference toggle)
+      await NotificationService.instance.showBookingConfirmation(
+        workshopName: _currentWorkshop.name,
+        date: '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+        time: _selectedTime!.format(context),
+      );
     } catch (e) {
       debugPrint('Error creating booking: $e');
     }

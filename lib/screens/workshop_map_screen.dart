@@ -10,9 +10,11 @@ import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/workshop_firebase_service.dart';
 import '../widgets/ui/ui.dart';
+import '../services/vehicle_insights.dart';
 import 'workshops/_browse_tab.dart';
 import 'workshops/_my_bookings_tab.dart';
 import 'workshops/_workshop_detail_sheet.dart';
+import 'workshops/_edit_booking_sheet.dart';
 
 /// Redesigned `WorkshopMapScreen` (Tasks 9.2 — 9.13).
 ///
@@ -276,6 +278,53 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
     _tabController.animateTo(0);
   }
 
+  void _onBookingTap(Map<String, dynamic> booking) {
+    final String bookingId = booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) return;
+
+    AppBottomSheet.show<void>(
+      context,
+      initialHeightFraction: 0.65,
+      builder: (BuildContext sheetCtx) => EditBookingBottomSheet(
+        booking: booking,
+        onSave: (Map<String, dynamic> updates) async {
+          Navigator.of(sheetCtx).pop(); // Close the sheet
+          try {
+            // Firestore updates
+            final Map<String, dynamic> firestoreUpdates = <String, dynamic>{
+              'serviceName': updates['serviceName'],
+              'status': updates['status'],
+              'date': updates['date'],
+              'time': updates['time'],
+            };
+            await _service.updateBooking(bookingId, firestoreUpdates);
+
+            // SharedPreferences local updates
+            final Map<String, dynamic> localUpdates = <String, dynamic>{
+              'serviceName': updates['serviceName'],
+              'status': updates['status'],
+              'date': updates['localDate'],
+              'time': updates['localTime'],
+            };
+            await VehicleInsights.instance.updateBooking(bookingId, localUpdates);
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Booking updated successfully')),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to update booking: $e')),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
   // ---- Build ----------------------------------------------------------
 
   @override
@@ -331,6 +380,7 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
                   onReschedule: _onReschedule,
                   onCancel: _onCancelBooking,
                   onBrowse: _onBrowseFromEmpty,
+                  onTap: _onBookingTap,
                 ),
               ],
             ),
@@ -347,12 +397,14 @@ class _MyBookingsBranch extends StatelessWidget {
     required this.onReschedule,
     required this.onCancel,
     required this.onBrowse,
+    required this.onTap,
   });
 
   final WorkshopFirebaseService service;
   final void Function(String) onReschedule;
   final void Function(String) onCancel;
   final VoidCallback onBrowse;
+  final void Function(Map<String, dynamic>) onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -361,6 +413,7 @@ class _MyBookingsBranch extends StatelessWidget {
       return MyBookingsTab(
         bookings: const <Map<String, dynamic>>[],
         onBrowse: onBrowse,
+        onTap: onTap,
       );
     }
     return StreamBuilder<List<Map<String, dynamic>>>(
@@ -379,6 +432,7 @@ class _MyBookingsBranch extends StatelessWidget {
           onReschedule: onReschedule,
           onCancel: onCancel,
           onBrowse: onBrowse,
+          onTap: onTap,
         );
       },
     );

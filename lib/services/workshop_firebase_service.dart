@@ -30,12 +30,18 @@ class WorkshopFirebaseService {
     });
   }
 
-  // Create a new booking
-  Future<void> createBooking(Map<String, dynamic> bookingData) async {
-    await _firestore.collection('bookings').add({
+  // Create a new booking and return the created document ID
+  Future<String> createBooking(Map<String, dynamic> bookingData) async {
+    final DocumentReference<Map<String, dynamic>> ref = await _firestore.collection('bookings').add({
       ...bookingData,
       'created_at': FieldValue.serverTimestamp(),
     });
+    return ref.id;
+  }
+
+  /// Updates a booking's fields in Firestore.
+  Future<void> updateBooking(String bookingId, Map<String, dynamic> updates) async {
+    await _firestore.collection('bookings').doc(bookingId).update(updates);
   }
 
   /// Toggles the favorite status for [workshopId] under the currently

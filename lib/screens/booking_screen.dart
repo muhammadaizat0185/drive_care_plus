@@ -30,8 +30,10 @@ import '../core/theme/tokens/tokens.dart';
 import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/vehicle_insights.dart';
+import '../services/workshop_firebase_service.dart';
 import '../widgets/ui/ui.dart';
 import 'booking/_widgets.dart';
+import 'workshops/_edit_booking_sheet.dart';
 
 class BookingScreen extends StatelessWidget {
   const BookingScreen({super.key});
@@ -40,12 +42,15 @@ class BookingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    // Allow callers to open directly on a specific tab via route arguments.
+    // Pass `1` to land on the "My Bookings" tab.
+    final int initialTab =
+        (ModalRoute.of(context)?.settings.arguments as int?) ?? 0;
 
     return AppBackground(
       child: DefaultTabController(
         length: 2,
+        initialIndex: initialTab,
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
@@ -115,14 +120,18 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
   }
 
   Future<void> _getCurrentLocationAndSearch() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
     try {
       final permission = await Geolocator.checkPermission();
+      if (!mounted) return;
       if (permission == LocationPermission.denied) {
         await Geolocator.requestPermission();
+        if (!mounted) return;
       }
 
       final position = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
       setState(() => currentPosition = position);
 
       await _searchWorkshops();
@@ -134,7 +143,7 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
   }
 
   Future<void> _searchWorkshops() async {
-    if (currentPosition == null) return;
+    if (currentPosition == null || !mounted) return;
 
     setState(() => isLoading = true);
 
@@ -146,7 +155,6 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
     } else if (selectedCategory == 'Car Accessories') {
       includedTypes = ['auto_parts_store'];
     }
-    // For 'Other', we leave includedTypes null to search broadly
 
     final results = await GoogleMapsService.searchNearbyWorkshops(
       LatLng(currentPosition!.latitude, currentPosition!.longitude),
@@ -154,40 +162,39 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
       includedTypes: includedTypes,
     );
 
-    if (mounted) {
-      setState(() {
-        workshops = results
-            .map((json) => Workshop.fromGooglePlace(json))
-            .where((w) => !w.isGasStation) // Exclude gas stations.
-            .map((w) {
-          if (w.location != null && currentPosition != null) {
-            final dist = Geolocator.distanceBetween(
-              currentPosition!.latitude,
-              currentPosition!.longitude,
-              w.location!.latitude,
-              w.location!.longitude,
-            );
-            final km = dist / 1000;
-            return Workshop(
-              id: w.id,
-              name: w.name,
-              address: w.address,
-              rating: w.rating,
-              reviewCount: w.reviewCount,
-              location: w.location,
-              isGooglePlace: true,
-              openingHours: w.openingHours,
-              distance: '${km.toStringAsFixed(1)} km',
-              distanceValue: km,
-              types: w.types,
-              isOpenNow: w.isOpenNow,
-            );
-          }
-          return w;
-        }).toList();
-        isLoading = false;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      workshops = results
+          .map((json) => Workshop.fromGooglePlace(json))
+          .where((w) => !w.isGasStation)
+          .map((w) {
+        if (w.location != null && currentPosition != null) {
+          final dist = Geolocator.distanceBetween(
+            currentPosition!.latitude,
+            currentPosition!.longitude,
+            w.location!.latitude,
+            w.location!.longitude,
+          );
+          final km = dist / 1000;
+          return Workshop(
+            id: w.id,
+            name: w.name,
+            address: w.address,
+            rating: w.rating,
+            reviewCount: w.reviewCount,
+            location: w.location,
+            isGooglePlace: true,
+            openingHours: w.openingHours,
+            distance: '${km.toStringAsFixed(1)} km',
+            distanceValue: km,
+            types: w.types,
+            isOpenNow: w.isOpenNow,
+          );
+        }
+        return w;
+      }).toList();
+      isLoading = false;
+    });
   }
 
   @override
@@ -390,6 +397,59 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
 class _MyBookingsTab extends StatelessWidget {
   const _MyBookingsTab();
 
+  void _onBookingTap(BuildContext context, Map<String, dynamic> booking) {
+    final String firestoreId = booking['id']?.toString() ?? '';
+    final String localId = booking['id']?.toString() ?? booking['workshopId']?.toString() ?? '';
+
+    if (localId.isEmpty) return;
+
+    final WorkshopFirebaseService firebaseService = WorkshopFirebaseService();
+
+    AppBottomSheet.show<void>(
+      context,
+      initialHeightFraction: 0.65,
+      builder: (BuildContext sheetCtx) => EditBookingBottomSheet(
+        booking: booking,
+        onSave: (Map<String, dynamic> updates) async {
+          Navigator.of(sheetCtx).pop(); // Close sheet
+          try {
+            // SharedPreferences local updates
+            final Map<String, dynamic> localUpdates = <String, dynamic>{
+              'serviceName': updates['serviceName'],
+              'status': updates['status'],
+              'date': updates['localDate'],
+              'time': updates['localTime'],
+            };
+            await VehicleInsights.instance.updateBooking(localId, localUpdates);
+
+            // Firestore updates (if firestore ID is present)
+            if (firestoreId.isNotEmpty) {
+              final Map<String, dynamic> firestoreUpdates = <String, dynamic>{
+                'serviceName': updates['serviceName'],
+                'status': updates['status'],
+                'date': updates['date'],
+                'time': updates['time'],
+              };
+              await firebaseService.updateBooking(firestoreId, firestoreUpdates);
+            }
+
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Booking updated successfully')),
+              );
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to update booking: $e')),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -415,7 +475,10 @@ class _MyBookingsTab extends StatelessWidget {
           separatorBuilder: (_, _) => SizedBox(height: spacing.md),
           itemBuilder: (context, index) {
             final booking = bookings[index];
-            return BookingConfirmedCard(booking: booking);
+            return BookingConfirmedCard(
+              booking: booking,
+              onTap: () => _onBookingTap(context, booking),
+            );
           },
         );
       },
