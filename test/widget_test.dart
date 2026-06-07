@@ -10,5 +10,9 @@ void main() {
       find.text('Smart vehicle maintenance and trip tracker'),
       findsOneWidget,
     );
+
+    // Clean up transition timer
+    await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump(const Duration(milliseconds: 100));
   });
 }

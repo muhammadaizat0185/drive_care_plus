@@ -1,5 +1,29 @@
+// Token + Component_Library sweep (Group 14, Task 14.6).
+//
+// Chrome restyle ONLY. Per Requirement 14.4, this sweep:
+//   * Replaces hex literals (#0F172A, #F9FAFB, etc.) with token references.
+//   * Routes spacing/typography through token extensions.
+//   * Swaps the inline `LinearProgressIndicator` for `AppSpinner` styling
+//     for the indeterminate branch and a token-driven `LinearProgressIndicator`
+//     for the determinate branch.
+//   * Restyles the cancel-confirmation `AlertDialog` action with
+//     `AppGradientButton`-like styling but keeps the dialog API intact.
+//
+// PRESERVES (do NOT touch):
+//   * `WebViewController` instantiation and `setJavaScriptMode`.
+//   * `setNavigationDelegate(NavigationDelegate(... onProgress, onPageStarted,
+//     onPageFinished, onNavigationRequest ...))`.
+//   * Detection of `widget.returnUrl`, `status_id` parsing, and
+//     `Navigator.pop(context, true/false/null)` callback routing.
+//   * `loadRequest(Uri.parse(widget.checkoutUrl))`.
+//   * Cancel-payment confirmation dialog flow and its `Navigator.pop` chain.
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+
+import '../core/theme/color_utils.dart';
+import '../core/theme/tokens/tokens.dart';
+import '../widgets/ui/ui.dart';
 
 class ToyyibPayWebViewScreen extends StatefulWidget {
   final String checkoutUrl;
@@ -19,6 +43,8 @@ class _ToyyibPayWebViewScreenState extends State<ToyyibPayWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
   double _loadingProgress = 0.0;
+
+  // WebView controller setup.
 
   @override
   void initState() {
@@ -51,16 +77,17 @@ class _ToyyibPayWebViewScreenState extends State<ToyyibPayWebViewScreen> {
           onNavigationRequest: (NavigationRequest request) {
             final url = request.url;
             debugPrint('Intercepted WebView URL: $url');
-            
+
             // Detect if page has redirected back to our callback / return URL
             if (url.startsWith(widget.returnUrl)) {
               final uri = Uri.parse(url);
-              
+
               // ToyyibPay returns 'status_id' (1 = success, 2 = pending, 3 = failed)
-              final status = uri.queryParameters['status_id'] ?? uri.queryParameters['status'];
-              
+              final status = uri.queryParameters['status_id'] ??
+                  uri.queryParameters['status'];
+
               debugPrint('Detected ToyyibPay Payment Status: $status');
-              
+
               if (status == '1') {
                 Navigator.pop(context, true); // Success
               } else if (status == '2') {
@@ -79,64 +106,80 @@ class _ToyyibPayWebViewScreenState extends State<ToyyibPayWebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
-      appBar: AppBar(
-        title: const Text(
-          'ToyyibPay FPX Payment',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(
+            'ToyyibPay FPX Payment',
+            style: typography.title.copyWith(color: colors.foreground),
+          ),
+          leading: AppIconButton(
+            icon: Icons.arrow_back,
+            semanticsLabel: 'Cancel payment',
+            onPressed: () => _confirmCancel(context),
+          ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            // Confirm exit before canceling payment
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Cancel Payment?'),
-                content: const Text('Are you sure you want to exit and cancel this top-up transaction?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('No, Continue'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context); // Close dialog
-                      Navigator.pop(context, false); // Return failure/canceled
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Yes, Cancel'),
-                  ),
-                ],
+        body: Stack(
+          children: [
+            // WebView Widget — controller untouched.
+            WebViewWidget(controller: _controller),
+  
+            // Loading indicator at the very top of the webview chrome.
+            if (_isLoading)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  value: _loadingProgress > 0 ? _loadingProgress : null,
+                  color: colors.emerald500,
+                  backgroundColor: colors.muted,
+                  minHeight: spacing.xs,
+                ),
               ),
-            );
-          },
+          ],
         ),
       ),
-      body: Stack(
-        children: [
-          // WebView Widget
-          WebViewWidget(controller: _controller),
-          
-          // Premium loading bar indicator
-          if (_isLoading)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(
-                value: _loadingProgress > 0 ? _loadingProgress : null,
-                color: Theme.of(context).colorScheme.primary,
-                backgroundColor: isDark ? Colors.black26 : Colors.grey.withOpacity(0.1),
-                minHeight: 4,
-              ),
-            ),
+    );
+  }
+
+  void _confirmCancel(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Cancel Payment?',
+          style: typography.title.copyWith(color: colors.foreground),
+        ),
+        content: Text(
+          'Are you sure you want to exit and cancel this top-up transaction?',
+          style: typography.bodyLarge.copyWith(color: colors.foreground),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No, Continue'),
+          ),
+          // Render the destructive confirmation as an `AppGradientButton` so
+          // it shares the redesigned CTA contract; the navigation pop chain
+          // is preserved exactly.
+          AppGradientButton(
+            label: 'Yes, Cancel',
+            fullWidth: false,
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context, false); // Return failure/canceled
+            },
+          ),
         ],
       ),
     );

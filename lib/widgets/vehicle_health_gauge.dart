@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'glass_container.dart';
 import '../services/vehicle_insights.dart';
-import '../screens/home_screen.dart';
 
 class VehicleHealthGauge extends StatelessWidget {
   const VehicleHealthGauge({super.key});
@@ -45,10 +44,20 @@ class VehicleHealthGauge extends StatelessWidget {
         }
         final assetPath = 'assets/images/cars/Car Vector/PNG/$assetName';
 
-        return GlassContainer(
-          borderRadius: 24,
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.grey.withOpacity(0.1)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           padding: const EdgeInsets.all(20),
-          opacity: 0.1,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

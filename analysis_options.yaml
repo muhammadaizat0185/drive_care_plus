@@ -9,6 +9,20 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+# Reference_Source isolation (Requirement 15) is enforced by
+# `tool/reference_source_guard.dart`, which is wired into CI in
+# `.github/workflows/ci.yml` and runs before `flutter analyze`,
+# `flutter test`, and `flutter build`. The guard itself scans this file for
+# any literal mention of the Reference_Source folder name; the folder is
+# gitignored (see `.gitignore`) and is never present in CI checkouts, so no
+# defensive `analyzer.exclude` entry is needed (and adding one would itself
+# trigger the guard).
+#
+# This project does not currently ship a custom analyzer plugin or
+# `custom_lint` rule set, so there is no `analyzer.plugins` block to wire in.
+# The Token_Set lint guard (`test/core/theme/tokens/lint_guard_test.dart`) is
+# a regular `package:test` AST walk and runs as part of `flutter test`.
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

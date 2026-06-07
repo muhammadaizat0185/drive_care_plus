@@ -26,13 +26,13 @@ class PendingJourneyCard extends StatelessWidget {
     final diff = endTime.difference(startTime);
 
     if (diff.inSeconds < 60) {
-      return '\${diff.inSeconds} secs';
+      return '${diff.inSeconds} secs';
     } else if (diff.inMinutes < 60) {
-      return '\${diff.inMinutes} mins';
+      return '${diff.inMinutes} mins';
     } else {
       final hours = diff.inHours;
       final mins = diff.inMinutes % 60;
-      return '\${hours}h \${mins}m';
+      return '${hours}h ${mins}m';
     }
   }
 
@@ -114,7 +114,7 @@ class PendingJourneyCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          distance != null ? '\${distance.toStringAsFixed(2)} km' : '--',
+                          distance != null ? '${distance.toStringAsFixed(2)} km' : '--',
                           style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
                         ),
                       ],

@@ -64,6 +64,12 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  glados: ^1.1.7
+  # Used by `test/core/theme/tokens/lint_guard_test.dart` to AST-walk each
+  # token .dart file and assert every class field carries the `static const`
+  # modifiers (Requirements 1.9, 1.12). Already pulled in transitively via
+  # `package:test`, but pinned here so the lint guard's import is explicit.
+  analyzer: ^10.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
