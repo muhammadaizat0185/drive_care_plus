@@ -8,6 +8,7 @@ import 'booking_screen.dart';
 import 'document_vault_screen.dart';
 import 'home/_widgets.dart';
 import 'notifications_screen.dart';
+import '../services/notification_service.dart';
 import 'refuel_log_screen.dart';
 import 'settings_screen.dart';
 import 'trip_planner_screen.dart';
@@ -231,7 +232,20 @@ class _HomeCockpitBody extends StatelessWidget {
         actions: [
           IconButton(
             onPressed: () => Navigator.pushNamed(context, NotificationsScreen.routeName),
-            icon: Icon(Icons.notifications_outlined, color: charcoalColor),
+            icon: ListenableBuilder(
+              listenable: NotificationService.instance,
+              builder: (context, _) {
+                final int unread = NotificationService.instance.unreadCount;
+                return Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                  child: Icon(Icons.notifications_outlined, color: charcoalColor),
+                );
+              },
+            ),
             tooltip: 'Notifications',
           ),
           IconButton(

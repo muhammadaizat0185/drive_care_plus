@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'services/firebase_bootstrap.dart';
+import 'services/notification_preferences.dart';
+import 'services/notification_service.dart';
 import 'services/profile_service.dart';
 import 'services/theme_service.dart';
 import 'services/vehicle_insights.dart';
@@ -13,5 +15,11 @@ Future<void> main() async {
   await VehicleInsights.instance.loadFromPrefs();
   await ThemeService.instance.init();
   await ProfileService.instance.init();
+  // Fix: init notification preferences so persisted toggles survive restarts
+  await NotificationPreferences.instance.init();
+  // Init notification service and check for overdue maintenance items
+  await NotificationService.instance.init();
+  await NotificationService.instance.checkAndSendMaintenanceReminders();
   runApp(const DriveCarePlusApp());
 }
+

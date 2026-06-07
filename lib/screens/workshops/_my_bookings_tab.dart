@@ -40,12 +40,16 @@ class MyBookingsTab extends StatelessWidget {
   /// `null`, the CTA still renders but is disabled.
   final VoidCallback? onBrowse;
 
+  /// Optional tap handler for the booking card to open details editing.
+  final void Function(Map<String, dynamic> booking)? onTap;
+
   const MyBookingsTab({
     super.key,
     required this.bookings,
     this.onReschedule,
     this.onCancel,
     this.onBrowse,
+    this.onTap,
   });
 
   /// `ValueKey` attached to the populated branch's outer scroll view. The
@@ -90,6 +94,7 @@ class MyBookingsTab extends StatelessWidget {
         final String id = booking['id']?.toString() ?? '';
         return _BookingCard(
           booking: booking,
+          onTap: onTap == null ? null : () => onTap!(booking),
           onReschedule: onReschedule == null || id.isEmpty
               ? null
               : () => onReschedule!(id),
@@ -107,11 +112,13 @@ class _BookingCard extends StatelessWidget {
     required this.booking,
     required this.onReschedule,
     required this.onCancel,
+    required this.onTap,
   });
 
   final Map<String, dynamic> booking;
   final VoidCallback? onReschedule;
   final VoidCallback? onCancel;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -128,80 +135,83 @@ class _BookingCard extends StatelessWidget {
     final String timeString = (booking['time'] ?? '').toString();
     final String status = (booking['status'] ?? 'Pending').toString();
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  workshopName,
-                  style: typography.title.copyWith(color: colors.foreground),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    return GestureDetector(
+      onTap: onTap,
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    workshopName,
+                    style: typography.title.copyWith(color: colors.foreground),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              AppBadge(
-                text: status,
-                kind: status.toLowerCase() == 'confirmed'
-                    ? BadgeKind.success
-                    : BadgeKind.info,
-              ),
-            ],
-          ),
-          SizedBox(height: spacing.xs),
-          Text(
-            serviceName,
-            style: typography.body.copyWith(color: colors.foreground),
-          ),
-          SizedBox(height: spacing.sm),
-          Row(
-            children: <Widget>[
-              Icon(
-                Icons.calendar_today_outlined,
-                size: typography.body.fontSize,
-                color: colors.foreground
-                    .withValues(alpha: colors.surfaceProminent),
-              ),
-              SizedBox(width: spacing.xs),
-              Text(
-                _formatDate(dateString),
-                style: typography.body.copyWith(color: colors.foreground),
-              ),
-              SizedBox(width: spacing.lg),
-              Icon(
-                Icons.access_time,
-                size: typography.body.fontSize,
-                color: colors.foreground
-                    .withValues(alpha: colors.surfaceProminent),
-              ),
-              SizedBox(width: spacing.xs),
-              Text(
-                timeString,
-                style: typography.body.copyWith(color: colors.foreground),
-              ),
-            ],
-          ),
-          SizedBox(height: spacing.md),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppSecondaryButton(
-                  label: 'Reschedule',
-                  onPressed: onReschedule,
+                AppBadge(
+                  text: status,
+                  kind: status.toLowerCase() == 'confirmed'
+                      ? BadgeKind.success
+                      : BadgeKind.info,
                 ),
-              ),
-              SizedBox(width: spacing.md),
-              Expanded(
-                child: AppSecondaryButton(
-                  label: 'Cancel',
-                  onPressed: onCancel,
+              ],
+            ),
+            SizedBox(height: spacing.xs),
+            Text(
+              serviceName,
+              style: typography.body.copyWith(color: colors.foreground),
+            ),
+            SizedBox(height: spacing.sm),
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: typography.body.fontSize,
+                  color: colors.foreground
+                      .withValues(alpha: colors.surfaceProminent),
                 ),
-              ),
-            ],
-          ),
-        ],
+                SizedBox(width: spacing.xs),
+                Text(
+                  _formatDate(dateString),
+                  style: typography.body.copyWith(color: colors.foreground),
+                ),
+                SizedBox(width: spacing.lg),
+                Icon(
+                  Icons.access_time,
+                  size: typography.body.fontSize,
+                  color: colors.foreground
+                      .withValues(alpha: colors.surfaceProminent),
+                ),
+                SizedBox(width: spacing.xs),
+                Text(
+                  timeString,
+                  style: typography.body.copyWith(color: colors.foreground),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing.md),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: AppSecondaryButton(
+                    label: 'Reschedule',
+                    onPressed: onReschedule,
+                  ),
+                ),
+                SizedBox(width: spacing.md),
+                Expanded(
+                  child: AppSecondaryButton(
+                    label: 'Cancel',
+                    onPressed: onCancel,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

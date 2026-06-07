@@ -258,6 +258,18 @@ class VehicleInsights extends ChangeNotifier {
     await _saveBookingsToPrefs();
   }
 
+  Future<void> updateBooking(String bookingId, Map<String, dynamic> updates) async {
+    final int index = _bookings.indexWhere((b) => b['id'] == bookingId || b['workshopId'] == bookingId);
+    if (index != -1) {
+      _bookings[index] = <String, dynamic>{
+        ..._bookings[index],
+        ...updates,
+      };
+      notifyListeners();
+      await _saveBookingsToPrefs();
+    }
+  }
+
   Future<void> _saveBookingsToPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();

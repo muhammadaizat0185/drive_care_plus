@@ -32,6 +32,11 @@ import 'services/theme_service.dart';
 class DriveCarePlusApp extends StatefulWidget {
   const DriveCarePlusApp({super.key});
 
+  /// App-wide navigator key used by [NotificationService] to navigate to the
+  /// correct screen when the user taps an OS notification from the system tray.
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   @override
   State<DriveCarePlusApp> createState() => _DriveCarePlusAppState();
 }
@@ -89,6 +94,7 @@ class _DriveCarePlusAppState extends State<DriveCarePlusApp> {
         return MaterialApp(
           title: 'DriveCare+',
           debugShowCheckedModeBanner: false,
+          navigatorKey: DriveCarePlusApp.navigatorKey,
           theme: pair.light,
           darkTheme: pair.dark,
           themeMode: themeService.themeMode,

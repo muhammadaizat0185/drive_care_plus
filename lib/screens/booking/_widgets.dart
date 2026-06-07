@@ -240,8 +240,13 @@ class BookingWorkshopCard extends StatelessWidget {
 /// Confirmed-booking card rendered in the "My Bookings" tab.
 class BookingConfirmedCard extends StatelessWidget {
   final Map<String, dynamic> booking;
+  final VoidCallback? onTap;
 
-  const BookingConfirmedCard({super.key, required this.booking});
+  const BookingConfirmedCard({
+    super.key,
+    required this.booking,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -257,92 +262,95 @@ class BookingConfirmedCard extends StatelessWidget {
     final Color mutedForeground =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  booking['workshopName'] ?? 'Workshop',
-                  style: typography.title.copyWith(color: colors.foreground),
+    return GestureDetector(
+      onTap: onTap,
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    booking['workshopName'] ?? 'Workshop',
+                    style: typography.title.copyWith(color: colors.foreground),
+                  ),
                 ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: spacing.md,
-                  vertical: spacing.xs,
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: spacing.md,
+                    vertical: spacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.emerald500
+                        .withValues(alpha: colors.surfaceMedium),
+                    borderRadius: BorderRadius.circular(radii.small),
+                    border: Border.all(color: colors.emerald500),
+                  ),
+                  child: Text(
+                    status,
+                    style: typography.label
+                        .copyWith(color: colors.emerald500),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: colors.emerald500
-                      .withValues(alpha: colors.surfaceMedium),
-                  borderRadius: BorderRadius.circular(radii.small),
-                  border: Border.all(color: colors.emerald500),
+              ],
+            ),
+            Divider(
+              height: spacing.xl,
+              color: colors.border,
+            ),
+            Row(
+              children: [
+                Icon(
+                  Icons.build_circle_outlined,
+                  size: typography.title.fontSize,
+                  color: mutedForeground,
                 ),
-                child: Text(
-                  status,
-                  style: typography.label
-                      .copyWith(color: colors.emerald500),
+                SizedBox(width: spacing.sm),
+                Expanded(
+                  child: Text(
+                    booking['serviceName'] ?? 'Service',
+                    style: typography.bodyLarge
+                        .copyWith(color: colors.foreground),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          Divider(
-            height: spacing.xl,
-            color: colors.border,
-          ),
-          Row(
-            children: [
-              Icon(
-                Icons.build_circle_outlined,
-                size: typography.title.fontSize,
-                color: mutedForeground,
-              ),
-              SizedBox(width: spacing.sm),
-              Expanded(
-                child: Text(
-                  booking['serviceName'] ?? 'Service',
-                  style: typography.bodyLarge
-                      .copyWith(color: colors.foreground),
+              ],
+            ),
+            SizedBox(height: spacing.sm),
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_month_outlined,
+                  size: typography.title.fontSize,
+                  color: mutedForeground,
                 ),
-              ),
-            ],
-          ),
-          SizedBox(height: spacing.sm),
-          Row(
-            children: [
-              Icon(
-                Icons.calendar_month_outlined,
-                size: typography.title.fontSize,
-                color: mutedForeground,
-              ),
-              SizedBox(width: spacing.sm),
-              Text(
-                '${booking['date']} at ${booking['time']}',
-                style:
-                    typography.bodyLarge.copyWith(color: colors.foreground),
-              ),
-            ],
-          ),
-          SizedBox(height: spacing.sm),
-          Row(
-            children: [
-              Icon(
-                Icons.payments_outlined,
-                size: typography.title.fontSize,
-                color: mutedForeground,
-              ),
-              SizedBox(width: spacing.sm),
-              Text(
-                'Estimated: RM ${price.toStringAsFixed(2)}',
-                style:
-                    typography.bodyLarge.copyWith(color: colors.emerald500),
-              ),
-            ],
-          ),
-        ],
+                SizedBox(width: spacing.sm),
+                Text(
+                  '${booking['date']} at ${booking['time']}',
+                  style:
+                      typography.bodyLarge.copyWith(color: colors.foreground),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing.sm),
+            Row(
+              children: [
+                Icon(
+                  Icons.payments_outlined,
+                  size: typography.title.fontSize,
+                  color: mutedForeground,
+                ),
+                SizedBox(width: spacing.sm),
+                Text(
+                  'Estimated: RM ${price.toStringAsFixed(2)}',
+                  style:
+                      typography.bodyLarge.copyWith(color: colors.emerald500),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
