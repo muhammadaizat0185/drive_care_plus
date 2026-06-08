@@ -87,8 +87,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onTabChanged() {
     if (mounted) {
+      final int newIndex = HomeScreen.activeTabNotifier.value;
+      if (newIndex != 1) {
+        BookingScreen.activeTabNotifier.value = 0;
+      }
       setState(() {
-        _currentIndex = HomeScreen.activeTabNotifier.value;
+        _currentIndex = newIndex;
       });
     }
   }

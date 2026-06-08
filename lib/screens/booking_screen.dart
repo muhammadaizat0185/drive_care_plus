@@ -35,22 +35,53 @@ import '../widgets/ui/ui.dart';
 import 'booking/_widgets.dart';
 import 'workshops/_edit_booking_sheet.dart';
 
-class BookingScreen extends StatelessWidget {
+class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
 
   static const routeName = '/booking';
 
+  // Static notifier to allow programmatic tab selection (0 = Find Workshops, 1 = My Bookings)
+  static final ValueNotifier<int> activeTabNotifier = ValueNotifier<int>(0);
+
+  @override
+  State<BookingScreen> createState() => _BookingScreenState();
+}
+
+class _BookingScreenState extends State<BookingScreen> {
+  int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = BookingScreen.activeTabNotifier.value;
+    BookingScreen.activeTabNotifier.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    BookingScreen.activeTabNotifier.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (mounted) {
+      setState(() {
+        _selectedIndex = BookingScreen.activeTabNotifier.value;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Allow callers to open directly on a specific tab via route arguments.
-    // Pass `1` to land on the "My Bookings" tab.
-    final int initialTab =
-        (ModalRoute.of(context)?.settings.arguments as int?) ?? 0;
+    // Also support fallback route arguments if needed (Requirement 14.5).
+    final int argTab =
+        (ModalRoute.of(context)?.settings.arguments as int?) ?? _selectedIndex;
 
     return AppBackground(
       child: DefaultTabController(
+        key: ValueKey(argTab),
         length: 2,
-        initialIndex: initialTab,
+        initialIndex: argTab,
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
