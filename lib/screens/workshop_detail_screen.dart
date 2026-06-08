@@ -796,6 +796,21 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         date: '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
         time: _selectedTime!.format(context),
       );
+
+      // Schedule booking reminders (30m before and exact time)
+      final bookingDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedTime!.hour,
+        _selectedTime!.minute,
+      );
+      await NotificationService.instance.scheduleBookingReminders(
+        bookingId: bookingId,
+        workshopName: _currentWorkshop.name,
+        serviceName: _selectedServiceType,
+        bookingDateTime: bookingDateTime,
+      );
     } catch (e) {
       debugPrint('Error creating booking: $e');
     }

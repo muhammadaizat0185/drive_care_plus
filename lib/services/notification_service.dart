@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 import '../app.dart';
 import '../screens/booking_screen.dart';
@@ -106,6 +108,19 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> init() async {
     if (_initialized) return;
+
+    // Initialize timezones
+    tz.initializeTimeZones();
+    try {
+      final String localName = DateTime.now().timeZoneName;
+      tz.setLocalLocation(tz.getLocation(localName));
+    } catch (_) {
+      try {
+        tz.setLocalLocation(tz.getLocation('Asia/Kuala_Lumpur'));
+      } catch (_) {
+        tz.setLocalLocation(tz.UTC);
+      }
+    }
 
     final AndroidInitializationSettings androidInit =
         const AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -385,4 +400,91 @@ class NotificationService extends ChangeNotifier {
   }
 
   int _notificationId(String key) => key.hashCode.abs() % 100000;
+
+  /// Schedules two booking reminders: one at 30 minutes before, and one at the exact booking time.
+  Future<void> scheduleBookingReminders({
+    required String bookingId,
+    required String workshopName,
+    required String serviceName,
+    required DateTime bookingDateTime,
+  }) async {
+    // Check toggle preference
+    if (!NotificationPreferences.instance.bookingConfirmations) return;
+
+    // First cancel any existing reminders for this booking ID
+    await cancelBookingReminders(bookingId);
+
+    final now = DateTime.now();
+
+    // 1. 30 minutes before
+    final reminder30Min = bookingDateTime.subtract(const Duration(minutes: 30));
+    if (reminder30Min.isAfter(now)) {
+      await _schedule(
+        id: _reminder30MinId(bookingId),
+        title: 'Booking Reminder ⏰',
+        body: 'Your booking for $serviceName at $workshopName is in 30 minutes!',
+        scheduledTime: reminder30Min,
+        payload: NotificationPayload.booking,
+      );
+    }
+
+    // 2. Exact booking time ("right now")
+    if (bookingDateTime.isAfter(now)) {
+      await _schedule(
+        id: _reminderExactId(bookingId),
+        title: 'Appointment Time 🛠️',
+        body: 'Your appointment for $serviceName at $workshopName is starting now!',
+        scheduledTime: bookingDateTime,
+        payload: NotificationPayload.booking,
+      );
+    }
+  }
+
+  /// Cancels scheduled reminders for a specific booking.
+  Future<void> cancelBookingReminders(String bookingId) async {
+    try {
+      await _plugin.cancel(_reminder30MinId(bookingId));
+      await _plugin.cancel(_reminderExactId(bookingId));
+      debugPrint('NotificationService: Cancelled reminders for booking=$bookingId');
+    } catch (e) {
+      debugPrint('NotificationService: Error canceling reminders for booking=$bookingId: $e');
+    }
+  }
+
+  Future<void> _schedule({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+    required String payload,
+  }) async {
+    if (!_initialized) return;
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tz.TZDateTime.from(scheduledTime, tz.local),
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelBookings,
+            'Booking Confirmations',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: const DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
+      );
+      debugPrint('NotificationService: Scheduled notification id=$id at $scheduledTime');
+    } catch (e) {
+      debugPrint('NotificationService._schedule error: $e');
+    }
+  }
+
+  int _reminder30MinId(String bookingId) => (bookingId + '_30min').hashCode.abs() % 100000;
+  int _reminderExactId(String bookingId) => (bookingId + '_exact').hashCode.abs() % 100000;
 }

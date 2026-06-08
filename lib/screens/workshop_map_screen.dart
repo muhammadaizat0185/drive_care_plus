@@ -11,6 +11,7 @@ import '../services/google_maps_service.dart';
 import '../services/workshop_firebase_service.dart';
 import '../widgets/ui/ui.dart';
 import '../services/vehicle_insights.dart';
+import '../services/notification_service.dart';
 import 'workshops/_browse_tab.dart';
 import 'workshops/_my_bookings_tab.dart';
 import 'workshops/_workshop_detail_sheet.dart';
@@ -212,6 +213,39 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
         pickedDate.toIso8601String(),
         '${pickedTime.hour}:${pickedTime.minute}',
       );
+
+      // Update local storage in VehicleInsights so that cockpit is in sync
+      final String localDateStr = '${pickedDate.day}/${pickedDate.month}/${pickedDate.year}';
+      final String localTimeStr = pickedTime.format(context);
+      await VehicleInsights.instance.updateBooking(bookingId, <String, dynamic>{
+        'date': localDateStr,
+        'time': localTimeStr,
+        'status': 'Pending',
+      });
+
+      // Get booking details to reschedule reminders
+      final booking = VehicleInsights.instance.bookings.firstWhere(
+        (b) => b['id'] == bookingId || b['workshopId'] == bookingId,
+        orElse: () => <String, dynamic>{},
+      );
+      final String workshopName = booking['workshopName']?.toString() ?? 'Workshop';
+      final String serviceName = booking['serviceName']?.toString() ?? 'Service';
+
+      // Schedule reminders
+      final bookingDateTime = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+      await NotificationService.instance.scheduleBookingReminders(
+        bookingId: bookingId,
+        workshopName: workshopName,
+        serviceName: serviceName,
+        bookingDateTime: bookingDateTime,
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Booking rescheduled successfully')),
@@ -259,6 +293,10 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
     if (confirmed == true && mounted) {
       try {
         await _service.cancelBooking(bookingId);
+        await VehicleInsights.instance.updateBooking(bookingId, <String, dynamic>{
+          'status': 'Cancelled',
+        });
+        await NotificationService.instance.cancelBookingReminders(bookingId);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Booking cancelled successfully')),
@@ -307,6 +345,33 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
               'time': updates['localTime'],
             };
             await VehicleInsights.instance.updateBooking(bookingId, localUpdates);
+
+            // Reschedule notification reminders
+            if (updates['status'] == 'Cancelled') {
+              await NotificationService.instance.cancelBookingReminders(bookingId);
+            } else {
+              try {
+                final parsedDate = DateTime.parse(updates['date'] as String);
+                final timeParts = (updates['time'] as String).split(':');
+                final hour = int.parse(timeParts[0]);
+                final minute = int.parse(timeParts[1]);
+                final bookingDateTime = DateTime(
+                  parsedDate.year,
+                  parsedDate.month,
+                  parsedDate.day,
+                  hour,
+                  minute,
+                );
+                await NotificationService.instance.scheduleBookingReminders(
+                  bookingId: bookingId,
+                  workshopName: booking['workshopName']?.toString() ?? 'Workshop',
+                  serviceName: updates['serviceName']?.toString() ?? 'General Service',
+                  bookingDateTime: bookingDateTime,
+                );
+              } catch (e) {
+                debugPrint('Error updating booking reminders: $e');
+              }
+            }
 
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(

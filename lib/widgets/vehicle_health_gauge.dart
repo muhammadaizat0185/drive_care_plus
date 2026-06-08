@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'glass_container.dart';
 import '../services/vehicle_insights.dart';
 
@@ -30,19 +31,25 @@ class VehicleHealthGauge extends StatelessWidget {
         final isCritical = kmLeft <= 500;
 
         // Determine asset path based on carType
-        String assetName;
-        switch (insights.carType.toLowerCase()) {
-          case 'sedan': assetName = 'Sedan Front.png'; break;
-          case 'suv': assetName = 'SUV Front.png'; break;
-          case 'jeep': assetName = 'Jeep Front.png'; break;
-          case 'pickup': assetName = 'Pickup Front.png'; break;
-          case 'sport': assetName = 'Sport Front.png'; break;
-          case 'coupe': assetName = 'Coupe Front.png'; break;
-          case 'cabriolet': assetName = 'Cabriolet Front.png'; break;
-          case 'compact':
-          default: assetName = 'Compact Front.png'; break;
-        }
-        final assetPath = 'assets/images/cars/Car Vector/PNG/$assetName';
+        const premiumTypes = <String>{
+          'exoraGold',
+          'axiaBlue',
+          'axiaRed',
+          'axiaWhite',
+          'exoraBrown',
+          'myviBlack',
+          'myviBlue',
+          'myviRed',
+          'myviWhite',
+          'sagaBlack',
+          'sagaRed',
+          'sagaSilver',
+        };
+        final carType = insights.carType.isEmpty ? 'sedan' : insights.carType;
+        final isPremium = premiumTypes.contains(carType);
+        final assetPath = isPremium
+            ? 'assets/images/cars/Premium/${carType}_front.svg'
+            : 'assets/images/cars/Car Vector/SVG/${carType}_front.svg';
 
         return Container(
           decoration: BoxDecoration(
@@ -110,7 +117,7 @@ class VehicleHealthGauge extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   Center(
-                    child: Image.asset(
+                    child: SvgPicture.asset(
                       assetPath,
                       height: 140,
                       fit: BoxFit.contain,

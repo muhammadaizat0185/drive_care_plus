@@ -31,6 +31,7 @@
 //     this refactor does not introduce visual regressions while the wider
 //     redesign is still in progress.
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/util/clamp_percentage.dart';
@@ -40,6 +41,7 @@ import '../../services/profile_service.dart';
 import '../../services/vehicle_insights.dart';
 import '../../widgets/ui/ui.dart';
 import '../../widgets/wallet_top_up_sheet.dart';
+import '../booking_screen.dart';
 import '../document_vault_screen.dart';
 import '../home_screen.dart';
 import '../settings_screen.dart';
@@ -129,7 +131,17 @@ class GreetingHeader extends StatelessWidget {
                 ),
                 child: CircleAvatar(
                   radius: 28,
-                  backgroundImage: NetworkImage(profile.photoUrl),
+                  backgroundImage: () {
+                    final String url = profile.photoUrl;
+                    if (url.isEmpty) {
+                      return const NetworkImage('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80') as ImageProvider;
+                    }
+                    if (url.startsWith('http://') || url.startsWith('https://')) {
+                      return NetworkImage(url);
+                    } else {
+                      return FileImage(File(url));
+                    }
+                  }(),
                   backgroundColor: Colors.grey.shade200,
                 ),
               ),
@@ -581,7 +593,10 @@ class UpcomingAppointmentCard extends StatelessWidget {
               Icons.chevron_right,
               color: isDark ? Colors.white38 : Colors.black26,
             ),
-            onTap: () => HomeScreen.activeTabNotifier.value = 1,
+            onTap: () {
+              BookingScreen.activeTabNotifier.value = 1;
+              HomeScreen.activeTabNotifier.value = 1;
+            },
           ),
         );
       },
