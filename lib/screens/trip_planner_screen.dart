@@ -354,7 +354,28 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
       await FlutterForegroundTask.requestIgnoreBatteryOptimization();
     }
 
-    final id = await JourneyDatabase.instance.startJourney();
+    // Phase 5: Persist planned route metadata so deviation can be computed
+    // in LocationTaskHandler.onDestroy() at journey end.
+    int? plannedDurationS;
+    if (_routeDuration != null) {
+      // _routeDuration is formatted as "X hours Y mins" or "X mins" from
+      // the Directions API. Parse it to seconds for storage.
+      final parts = _routeDuration!.toLowerCase();
+      int totalSeconds = 0;
+      final hourMatch = RegExp(r'(\d+)\s*hour').firstMatch(parts);
+      final minMatch = RegExp(r'(\d+)\s*min').firstMatch(parts);
+      if (hourMatch != null) totalSeconds += int.parse(hourMatch.group(1)!) * 3600;
+      if (minMatch != null) totalSeconds += int.parse(minMatch.group(1)!) * 60;
+      if (totalSeconds > 0) plannedDurationS = totalSeconds;
+    }
+
+    final id = await JourneyDatabase.instance.startJourney(
+      status: 'PENDING_CONFIRMATION',
+      plannedDistanceKm: _routeDistanceMeters != null
+          ? _routeDistanceMeters! / 1000.0
+          : null,
+      plannedDurationS: plannedDurationS,
+    );
     await LocationTracker.startTracking();
 
     if (!mounted) return;

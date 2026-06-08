@@ -8,8 +8,10 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../app.dart';
 import '../screens/booking_screen.dart';
+import '../screens/journey_log_screen.dart';
 import '../screens/maintenance_screen.dart';
 import '../screens/notifications_screen.dart';
+import 'journey_database.dart';
 import 'notification_preferences.dart';
 import 'vehicle_insights.dart';
 
@@ -22,6 +24,10 @@ import 'vehicle_insights.dart';
 class NotificationPayload {
   static const String maintenance = 'maintenance';
   static const String booking = 'booking';
+
+  /// Tapping this payload opens [JourneyLogScreen] with the confirmation
+  /// sheet auto-triggered.
+  static const String journeyReview = 'journey_review';
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +98,7 @@ class NotificationService extends ChangeNotifier {
   // Android notification channel IDs
   static const String _channelMaintenance = 'maintenance_reminders';
   static const String _channelBookings = 'booking_confirmations';
+  static const String _channelJourneyReview = 'journey_review';
 
   List<InboxNotification> _inbox = [];
   bool _initialized = false;
@@ -178,10 +185,12 @@ class NotificationService extends ChangeNotifier {
     if (payload == NotificationPayload.maintenance) {
       navigator.pushNamed(MaintenanceScreen.routeName);
     } else if (payload == NotificationPayload.booking) {
-      // arguments: 1 opens the "My Bookings" tab directly
       navigator.pushNamed(BookingScreen.routeName, arguments: 1);
+    } else if (payload == NotificationPayload.journeyReview) {
+      // Open the Journey Log screen; the sticky pending badge will be visible
+      // and the user can tap it to open the confirmation sheet.
+      navigator.pushNamed(JourneyLogScreen.routeName);
     } else {
-      // Fallback: open the notification inbox
       navigator.pushNamed(NotificationsScreen.routeName);
     }
   }
@@ -215,6 +224,16 @@ class NotificationService extends ChangeNotifier {
         'Booking Confirmations',
         description: 'Confirms workshop appointments you have scheduled.',
         importance: Importance.high,
+      ),
+    );
+
+    await androidPlugin.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _channelJourneyReview,
+        'Trip Review',
+        description:
+            'Daily reminder to confirm which detected trips were in your car.',
+        importance: Importance.defaultImportance,
       ),
     );
   }
@@ -280,6 +299,171 @@ class NotificationService extends ChangeNotifier {
       payload: NotificationPayload.maintenance,
     );
   }
+
+  // -------------------------------------------------------------------------
+  // Journey review notifications (Phase 3)
+  // -------------------------------------------------------------------------
+
+  /// Schedules a daily trip-review notification at 9 PM local time.
+  ///
+  /// The notification fires every day at 21:00 and is automatically cancelled
+  /// if [cancelDailyTripReviewNotification] is called (e.g. user opts out).
+  /// Calling this method multiple times is safe — it cancels the previous
+  /// schedule before creating a new one.
+  ///
+  /// The notification checks at fire-time whether there are pending journeys.
+  /// Because `zonedSchedule` fires unconditionally, the actual pending-check
+  /// happens in [checkAndSendTripReviewIfNeeded], which the app calls from a
+  /// background task or on resume.
+  Future<void> scheduleDailyTripReviewNotification() async {
+    if (!_initialized) return;
+    try {
+      // Cancel any existing schedule first.
+      await _plugin.cancel(_tripReviewNotificationId);
+
+      // Build next 9 PM in local timezone.
+      final tz.TZDateTime scheduledTime = _nextDailyAt(hour: 21, minute: 0);
+
+      await _plugin.zonedSchedule(
+        _tripReviewNotificationId,
+        '🚗 Trip Review',
+        'You have unconfirmed trips today — tap to confirm your vehicle.',
+        scheduledTime,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelJourneyReview,
+            'Trip Review',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            // Show "Confirm Now" action button on Android.
+            actions: <AndroidNotificationAction>[
+              const AndroidNotificationAction(
+                'confirm_trips',
+                'Confirm Now',
+                showsUserInterface: true,
+                cancelNotification: true,
+              ),
+            ],
+          ),
+          iOS: const DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time, // repeat daily
+        payload: NotificationPayload.journeyReview,
+      );
+      debugPrint(
+          'NotificationService: trip review scheduled daily at 21:00, next=$scheduledTime');
+    } catch (e) {
+      debugPrint('NotificationService.scheduleDailyTripReviewNotification: $e');
+    }
+  }
+
+  /// Cancels the daily trip-review notification.
+  Future<void> cancelDailyTripReviewNotification() async {
+    await _plugin.cancel(_tripReviewNotificationId);
+  }
+
+  /// Fires an **immediate** trip-review notification.
+  ///
+  /// Called when the app is foregrounded and there are ≥2 pending journeys
+  /// from today. Deduped per day so it only fires once per calendar day.
+  Future<void> showTripReviewNotification({
+    required int pendingCount,
+    required double totalKm,
+  }) async {
+    if (!_initialized) return;
+
+    final String today = DateTime.now().toIso8601String().substring(0, 10);
+    final String dedupKey = 'trip_review_notified_$today';
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(dedupKey) == true) return;
+
+    final String title =
+        '🚗 $pendingCount trip${pendingCount == 1 ? '' : 's'} detected today';
+    final String body =
+        '${totalKm.toStringAsFixed(1)} km recorded — confirm which trips were in your car.';
+
+    await _addToInbox(InboxNotification(
+      id: 'trip_review_${DateTime.now().millisecondsSinceEpoch}',
+      type: NotificationPayload.journeyReview,
+      title: title,
+      body: body,
+      timestamp: DateTime.now(),
+    ));
+
+    await _dispatch(
+      id: _tripReviewNotificationId,
+      title: title,
+      body: body,
+      channelId: _channelJourneyReview,
+      channelName: 'Trip Review',
+      payload: NotificationPayload.journeyReview,
+    );
+
+    await prefs.setBool(dedupKey, true);
+  }
+
+  /// Checks today's journey database and fires [showTripReviewNotification]
+  /// if there are ≥1 PENDING_CONFIRMATION journeys.
+  ///
+  /// Call this from:
+  ///   • App resume (in [AppLifecycleObserver])
+  ///   • End of a passive background journey ([ActivityRecognitionService])
+  Future<void> checkAndSendTripReviewIfNeeded() async {
+    try {
+      final stats =
+          await JourneyDatabase.instance.getDailyStats(DateTime.now());
+      final int pending = stats['pendingCount'] as int? ?? 0;
+      if (pending < 1) return;
+
+      // Compute total detected km for the notification body.
+      final journeys = await JourneyDatabase.instance.getJourneys();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      double totalKm = 0.0;
+      for (final j in journeys) {
+        final st = j['start_time'] as String? ?? '';
+        if (!st.startsWith(today)) continue;
+        if (j['status'] == 'PENDING_CONFIRMATION' ||
+            j['status'] == 'pending') {
+          totalKm += (j['distance_km'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+
+      await showTripReviewNotification(
+        pendingCount: pending,
+        totalKm: totalKm,
+      );
+    } catch (e) {
+      debugPrint('NotificationService.checkAndSendTripReviewIfNeeded: $e');
+    }
+  }
+
+  // Fixed notification ID for the daily trip review
+  static const int _tripReviewNotificationId = 77001;
+
+  /// Returns the next [tz.TZDateTime] for [hour]:[minute] local time.
+  /// If that time has already passed today, returns tomorrow's occurrence.
+  tz.TZDateTime _nextDailyAt({required int hour, required int minute}) {
+    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    tz.TZDateTime scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    return scheduled;
+  }
+
+  // -------------------------------------------------------------------------
+  // Maintenance reminders
+  // -------------------------------------------------------------------------
 
   /// Iterates all vehicle watchlist items and fires a reminder for every
   /// item in **Red** or **Yellow** status. Deduped per day.

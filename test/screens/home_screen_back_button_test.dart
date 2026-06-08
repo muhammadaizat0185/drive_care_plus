@@ -366,8 +366,8 @@ void main() {
       expect(find.text('Press back again to exit'), findsOneWidget);
       expect(isSystemPopCalled, isFalse);
 
-      // Wait more than 2 seconds (e.g. 2.1 seconds physically to update wall-clock time)
-      await Future.delayed(const Duration(milliseconds: 2100));
+      // Wait more than 2 seconds physically to update wall-clock time
+      sleep(const Duration(milliseconds: 2100));
       await tester.pump();
 
       // Second back press after wait
