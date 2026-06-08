@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
@@ -20,6 +21,10 @@ Future<void> main() async {
   // Init notification service and check for overdue maintenance items
   await NotificationService.instance.init();
   await NotificationService.instance.checkAndSendMaintenanceReminders();
+  // Phase 3: Register/refresh the daily 9 PM trip-review notification and
+  // fire an immediate review prompt if there are unconfirmed journeys.
+  await NotificationService.instance.scheduleDailyTripReviewNotification();
+  unawaited(NotificationService.instance.checkAndSendTripReviewIfNeeded());
   runApp(const DriveCarePlusApp());
 }
 

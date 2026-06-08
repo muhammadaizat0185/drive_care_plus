@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme/color_utils.dart';
+import '../services/bluetooth_vehicle_service.dart';
 import '../services/car_database.dart';
 import '../services/profile_service.dart';
 import '../services/vehicle_insights.dart';
@@ -362,7 +363,11 @@ class VehicleScreen extends StatefulWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-  
+
+                // Bluetooth car audio pairing card (Phase 4)
+                _buildBluetoothPairingCard(context, insights),
+                const SizedBox(height: 16),
+
                 // Predictive Maintenance List (Watchlist)
                 _cardContainer(
                   isDark: isDark,
@@ -434,6 +439,184 @@ class VehicleScreen extends StatefulWidget {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bluetooth car audio pairing card (Phase 4)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildBluetoothPairingCard(
+      BuildContext context, VehicleInsights insights) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    final String vehicleId = insights.vehicles.isNotEmpty
+        ? (insights.vehicles[insights.activeVehicleIndex]['id'] as String? ??
+            '')
+        : '';
+
+    return _cardContainer(
+      isDark: isDark,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    shape: BoxShape.circle),
+                child: const Icon(Icons.bluetooth, color: Colors.blue),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Car Audio Bluetooth',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Auto-confirm trips when your car\'s BT device is connected.',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 6),
+                    FutureBuilder<String?>(
+                      future: vehicleId.isNotEmpty
+                          ? BluetoothVehicleService.instance
+                              .getCarBluetoothDevice(vehicleId)
+                          : Future.value(null),
+                      builder: (context, snapshot) {
+                        final paired = snapshot.data;
+                        return Text(
+                          paired != null && paired.isNotEmpty
+                              ? '🔗 Paired: $paired'
+                              : 'No device paired yet',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: paired != null
+                                ? Colors.blue
+                                : Colors.grey,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: vehicleId.isNotEmpty
+                    ? () => _showBtDevicePicker(
+                        context, vehicleId, primaryColor)
+                    : null,
+                child: const Text('Set Up',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBtDevicePicker(
+      BuildContext context, String vehicleId, Color primaryColor) async {
+    final devices = await BluetoothVehicleService.instance.getBondedDeviceNames();
+
+    if (!context.mounted) return;
+
+    if (devices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'No paired Bluetooth devices found. Pair your car audio in system settings first.'),
+        ),
+      );
+      return;
+    }
+
+    String? selected;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          title: const Text('Select Car Audio Device',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Choose the Bluetooth device your car head unit uses. Trips will be auto-confirmed when this device is connected.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                ...devices.map((name) => RadioListTile<String>(
+                      value: name,
+                      groupValue: selected,
+                      title: Text(name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14)),
+                      activeColor: primaryColor,
+                      onChanged: (v) => setDlg(() => selected = v),
+                    )),
+                if (devices.isNotEmpty)
+                  RadioListTile<String>(
+                    value: '',
+                    groupValue: selected,
+                    title: const Text('None (disable auto-confirm)',
+                        style: TextStyle(
+                            color: Colors.grey, fontSize: 13)),
+                    onChanged: (v) => setDlg(() => selected = v),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: selected == null
+                  ? null
+                  : () async {
+                      await BluetoothVehicleService.instance
+                          .setCarBluetoothDevice(
+                              vehicleId: vehicleId,
+                              deviceName:
+                                  selected!.isNotEmpty ? selected : null);
+                      if (context.mounted) {
+                        Navigator.pop(ctx);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(selected!.isNotEmpty
+                                ? '✅ Paired with $selected'
+                                : '🔌 Auto-confirm disabled'),
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+              child: const Text('Save'),
+            ),
+          ],
         ),
       ),
     );

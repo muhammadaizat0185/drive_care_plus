@@ -7,6 +7,8 @@ import 'screens/document_vault/_widgets.dart';
 import 'screens/document_vault_screen.dart';
 import 'screens/document_viewer_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/journey_log_screen.dart';
+import 'screens/journey_log/mileage_impact_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/maintenance_screen.dart';
 import 'screens/notifications_screen.dart';
@@ -14,6 +16,7 @@ import 'screens/refuel_log_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/trip_planner_screen.dart';
 import 'screens/trip_tracking_screen.dart';
 import 'screens/vehicle_customizer_screen.dart';
 import 'screens/vehicle_screen.dart';
@@ -110,6 +113,13 @@ class _DriveCarePlusAppState extends State<DriveCarePlusApp> {
                 const VehicleCustomizerScreen(),
             MaintenanceScreen.routeName: (_) => const MaintenanceScreen(),
             TripTrackingScreen.routeName: (_) => const TripTrackingScreen(),
+            TripPlannerScreen.routeName: (_) => const TripPlannerScreen(),
+            JourneyLogScreen.routeName: (_) => const JourneyLogScreen(),
+            MileageImpactScreen.routeName: (context) {
+              final args = ModalRoute.of(context)!.settings.arguments
+                  as MileageImpactArgs;
+              return MileageImpactScreen(args: args);
+            },
             BookingScreen.routeName: (_) => const BookingScreen(),
             RefuelLogScreen.routeName: (_) => const RefuelLogScreen(),
             WorkshopMapScreen.routeName: (_) => const WorkshopMapScreen(),

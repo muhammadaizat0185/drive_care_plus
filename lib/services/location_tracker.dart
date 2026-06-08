@@ -6,6 +6,7 @@ import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'google_maps_service.dart';
 import 'journey_database.dart';
+import 'vehicle_insights.dart';
 
 @pragma('vm:entry-point')
 void startCallback() {
@@ -93,44 +94,88 @@ class LocationTaskHandler extends TaskHandler {
           );
         }
 
-        // Snap to roads in the background (if we want the route clean for Journey Log)
-        // Note: We might just do this on-demand in the UI if we want to save API calls, 
-        // but since we want the actual route distance, it's fine.
-        final rawLatLng = pointsData.map((p) => LatLng(p['latitude'], p['longitude'])).toList();
+        // Snap to roads in the background for a clean route polyline.
+        final rawLatLng = pointsData
+            .map((p) => LatLng(p['latitude'], p['longitude']))
+            .toList();
         await GoogleMapsService.snapToRoads(rawLatLng);
-        
-        // Reverse Geocode the final coordinate to update the destination address
+
+        // Reverse geocode the final coordinate to update the destination address.
         String? finalDestAddress;
         try {
           final lastPoint = pointsData.last;
-          List<geocoding.Placemark> placemarks = await geocoding.placemarkFromCoordinates(
-              lastPoint['latitude'], lastPoint['longitude']);
+          List<geocoding.Placemark> placemarks =
+              await geocoding.placemarkFromCoordinates(
+                  lastPoint['latitude'], lastPoint['longitude']);
           if (placemarks.isNotEmpty) {
             final place = placemarks.first;
-            finalDestAddress = "${place.name}, ${place.locality}";
+            finalDestAddress = '${place.name}, ${place.locality}';
           }
         } catch (e) {
-          debugPrint("Geocoding failed: $e");
+          debugPrint('Geocoding failed: $e');
         }
 
-        // Finalize the journey in the database (this will only overwrite if it was a passive journey,
-        // or it will just update the missing fields for a planned journey if it ended early)
+        final double distanceKm = totalDistanceMeters / 1000.0;
+
+        // Finalise the journey row in the database.
         final journeys = await JourneyDatabase.instance.getJourneys();
-        final journey = journeys.firstWhere((j) => j['id'] == _journeyId, orElse: () => {});
+        final journey = journeys.firstWhere(
+            (j) => j['id'] == _journeyId,
+            orElse: () => {});
+
         if (journey.isNotEmpty && journey['end_time'] == null) {
-            await JourneyDatabase.instance.endJourney(_journeyId!, totalDistanceMeters / 1000.0, journey['start_address'], finalDestAddress);
+          await JourneyDatabase.instance.endJourney(
+            _journeyId!,
+            distanceKm,
+            journey['start_address'],
+            finalDestAddress,
+          );
         } else if (journey.isNotEmpty) {
-           // If already ended (e.g. by trip planner), just update the destination if it was null
-           if (journey['destination_address'] == null || journey['destination_address'] == 'No destination set') {
-             await JourneyDatabase.instance.updateJourneyDestination(_journeyId!, finalDestAddress);
-           }
+          // Already ended (e.g. by TripPlannerScreen) — patch destination if missing.
+          if (journey['destination_address'] == null ||
+              journey['destination_address'] == 'No destination set') {
+            await JourneyDatabase.instance
+                .updateJourneyDestination(_journeyId!, finalDestAddress);
+          }
         }
+
+        // ── Phase 1: mileage pipeline fix ─────────────────────────────────────
+        // Re-fetch the (now-finalised) journey to read its attribution fields.
+        final finalJourneys = await JourneyDatabase.instance.getJourneys();
+        final finalJourney = finalJourneys.firstWhere(
+            (j) => j['id'] == _journeyId,
+            orElse: () => {});
+
+        final vehicleType = finalJourney['vehicle_type'] as String? ?? '';
+        final vehicleId = finalJourney['vehicle_id'] as String?;
+
+        if (vehicleType == 'my_car' && vehicleId != null && vehicleId.isNotEmpty) {
+          // Confirmed as the user's own registered vehicle → update its odometer.
+          try {
+            await VehicleInsights.instance.updateCurrentMileageForVehicle(
+              vehicleId: vehicleId,
+              additionalKm: distanceKm,
+            );
+            debugPrint(
+                'Odometer updated: +${distanceKm.toStringAsFixed(2)} km → vehicle $vehicleId');
+          } catch (e) {
+            debugPrint('Mileage update failed: $e');
+          }
+        } else {
+          debugPrint(
+              'Journey $_journeyId not attributed to a registered vehicle — odometer unchanged.');
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
       } else if (pointsData.isNotEmpty) {
-        // Only 1 point, finalize with 0 distance
+        // Only 1 point — finalise with 0 distance.
         final journeys = await JourneyDatabase.instance.getJourneys();
-        final journey = journeys.firstWhere((j) => j['id'] == _journeyId, orElse: () => {});
+        final journey = journeys.firstWhere(
+            (j) => j['id'] == _journeyId,
+            orElse: () => {});
         if (journey.isNotEmpty && journey['end_time'] == null) {
-            await JourneyDatabase.instance.endJourney(_journeyId!, 0.0, journey['start_address'], null);
+          await JourneyDatabase.instance
+              .endJourney(_journeyId!, 0.0, journey['start_address'], null);
         }
       }
     }

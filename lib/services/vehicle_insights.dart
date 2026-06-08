@@ -91,23 +91,27 @@ class VehicleInsights extends ChangeNotifier {
     );
   }
 
+  /// Average km driven on days the user actually drove (ignores zero-driving days).
+  /// Uses a rolling 30-entry window from [_mileageHistory].
+  /// Each history entry is expected to carry an 'addedKm' field (added by
+  /// [updateCurrentMileage] and [updateCurrentMileageForVehicle]).
   double get averageKmPerDay {
-    if (_mileageHistory.length < 2) return 50.0;
-    final recent = _mileageHistory.last;
-    final oldest = _mileageHistory.first;
-    
-    final recentDate = DateTime.tryParse(recent['timestamp']?.toString() ?? '');
-    final oldestDate = DateTime.tryParse(oldest['timestamp']?.toString() ?? '');
-    
-    if (recentDate == null || oldestDate == null) return 50.0;
-    
-    final days = recentDate.difference(oldestDate).inDays;
-    if (days <= 0) return 50.0;
-    
-    final recentMileage = (recent['mileage'] as num?)?.toDouble() ?? 0.0;
-    final oldestMileage = (oldest['mileage'] as num?)?.toDouble() ?? 0.0;
-    
-    return (recentMileage - oldestMileage) / days;
+    if (_mileageHistory.isEmpty) return 50.0;
+
+    // Count unique calendar days that have at least 1 km of confirmed driving.
+    final Map<String, double> kmPerDay = {};
+    for (final entry in _mileageHistory) {
+      final added = (entry['addedKm'] as num?)?.toDouble() ?? 0.0;
+      if (added <= 0) continue;
+      final ts = DateTime.tryParse(entry['timestamp']?.toString() ?? '');
+      if (ts == null) continue;
+      final dayKey = '${ts.year}-${ts.month.toString().padLeft(2, '0')}-${ts.day.toString().padLeft(2, '0')}';
+      kmPerDay[dayKey] = (kmPerDay[dayKey] ?? 0.0) + added;
+    }
+
+    if (kmPerDay.isEmpty) return 50.0;
+    final totalKm = kmPerDay.values.fold(0.0, (sum, km) => sum + km);
+    return totalKm / kmPerDay.length;
   }
 
   // Compatibility aliases for customized vehicle health gauges
@@ -217,16 +221,17 @@ class VehicleInsights extends ChangeNotifier {
 
   Future<void> updateCurrentMileage(double mileage) async {
     if (mileage < _currentMileageKm) return; // Prevent reversing odometer
-    
+    final added = mileage - _currentMileageKm;
     _currentMileageKm = mileage;
     _mileageHistory.add({
       'mileage': mileage,
+      'addedKm': added,
       'timestamp': DateTime.now().toIso8601String(),
     });
-    
+
     // Keep only last 30 entries to save space/pref size
     if (_mileageHistory.length > 30) _mileageHistory.removeAt(0);
-    
+
     notifyListeners();
     await updateVehicle(
       model: _model,
@@ -234,6 +239,82 @@ class VehicleInsights extends ChangeNotifier {
       fuelType: _fuelType,
       currentMileageKm: _currentMileageKm,
     );
+  }
+
+  /// Increments the odometer of a specific registered vehicle by [additionalKm].
+  ///
+  /// Called by [LocationTaskHandler.onDestroy] after a confirmed-my-car journey
+  /// ends. If [vehicleId] matches the active vehicle, the in-memory state is
+  /// also updated so the dashboard reflects the change immediately.
+  Future<void> updateCurrentMileageForVehicle({
+    required String vehicleId,
+    required double additionalKm,
+  }) async {
+    if (additionalKm <= 0) return;
+
+    final idx = _vehicles.indexWhere((v) => v['id']?.toString() == vehicleId);
+    if (idx == -1) {
+      debugPrint('updateCurrentMileageForVehicle: vehicle $vehicleId not found');
+      return;
+    }
+
+    final current =
+        (_vehicles[idx]['currentMileageKm'] as num?)?.toDouble() ?? 0.0;
+    final updated = current + additionalKm;
+
+    // Patch the in-memory vehicle map
+    _vehicles[idx] = Map<String, dynamic>.from(_vehicles[idx])
+      ..['currentMileageKm'] = updated;
+
+    // Keep mileage history on the vehicle entry itself
+    final history = List<Map<String, dynamic>>.from(
+        _vehicles[idx]['mileageHistory'] as List? ?? []);
+    history.add({
+      'mileage': updated,
+      'addedKm': additionalKm,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+    if (history.length > 30) history.removeAt(0);
+    _vehicles[idx]['mileageHistory'] = history;
+
+    // If this is the active vehicle, sync in-memory scalar fields too
+    if (idx == _activeVehicleIndex) {
+      _currentMileageKm = updated;
+      _mileageHistory = history;
+    }
+
+    notifyListeners();
+
+    // Persist locally
+    await _saveVehiclesToPrefs();
+    if (idx == _activeVehicleIndex) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setDouble('vehicle_currentMileageKm', updated);
+      } catch (e) {
+        debugPrint('SharedPreferences mileage update error: $e');
+      }
+    }
+
+    // Persist to Firestore
+    final user = FirebaseAuth.instance.currentUser;
+    final docId = _vehicles[idx]['id']?.toString() ?? '';
+    if (user != null && docId.isNotEmpty) {
+      try {
+        ApiTracker.instance.trackCall('Cloud Firestore');
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('vehicles')
+            .doc(docId)
+            .update({
+          'currentMileageKm': updated,
+          'mileageHistory': history,
+        });
+      } catch (e) {
+        debugPrint('Firestore mileage update error: $e');
+      }
+    }
   }
 
   Future<void> logMaintenance(List<String> itemNames, double mileage) async {
