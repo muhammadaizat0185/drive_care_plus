@@ -193,7 +193,93 @@ class VehicleScreen extends StatefulWidget {
           listenable: VehicleInsights.instance,
           builder: (context, child) {
             final insights = VehicleInsights.instance;
-  
+            if (insights.vehicles.isEmpty) {
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const SizedBox(height: 40),
+                  Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withOpacity(0.05),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.garage_outlined,
+                              size: 64,
+                              color: primaryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'Your Garage is Empty',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  color: isDark ? Colors.white : const Color(0xFF1F2937),
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Add your first vehicle to unlock odometer tracking, visual component diagnostics, custom vehicle themes, specifications sheet, and predictive service checklists.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade500,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          ElevatedButton.icon(
+                            onPressed: _showRegisterVehicleDialog,
+                            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+                            label: const Text(
+                              'Register Vehicle',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
+                              elevation: 2,
+                              shadowColor: primaryColor.withOpacity(0.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               children: [

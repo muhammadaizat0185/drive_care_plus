@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'glass_container.dart';
 import '../services/vehicle_insights.dart';
+import '../screens/home_screen.dart';
 
 class VehicleHealthGauge extends StatelessWidget {
   const VehicleHealthGauge({super.key});
@@ -16,6 +17,117 @@ class VehicleHealthGauge extends StatelessWidget {
     return ListenableBuilder(
       listenable: insights,
       builder: (context, child) {
+        if (insights.vehicles.isEmpty) {
+          final Color primaryColor = Theme.of(context).colorScheme.primary;
+          return Container(
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey.withOpacity(0.1)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Car Health',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'NO ACTIVE VEHICLE',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: (isDark ? Colors.white : primaryColor).withOpacity(0.05),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.directions_car_outlined,
+                          size: 48,
+                          color: isDark ? Colors.white54 : primaryColor.withOpacity(0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No Vehicle Registered',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : const Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'Register your vehicle to start tracking odometer, fuel logs, and component health status.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          HomeScreen.activeTabNotifier.value = 2; // Switch to My Car tab
+                        },
+                        icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                        label: const Text(
+                          'Add Vehicle',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                          elevation: 2,
+                          shadowColor: primaryColor.withOpacity(0.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         // Get the most urgent health percentage from all watchlist items
         final watchlist = insights.watchlistItems;
         double rawPercentage = 1.0;

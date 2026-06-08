@@ -4,6 +4,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as p;
 
 import '../core/theme/color_utils.dart';
 import '../core/theme/preset_validator.dart';
@@ -17,6 +20,9 @@ import '../widgets/ui/ui.dart';
 import 'cloud_sync_quota_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
+import 'totp_setup_screen.dart';
+import '../services/biometric_service.dart';
+import '../services/totp_service.dart';
 
 /// Redesigned Settings screen — section scaffolding (task 8.1) + the
 /// `PROFILE` section (task 8.2).
@@ -56,6 +62,11 @@ class SettingsScreen extends StatefulWidget {
 
   static const String routeName = '/settings';
 
+  /// Override the temporary directory used for cache operations.
+  /// Used in tests to avoid scanning/deleting the host system's temp folder.
+  @visibleForTesting
+  static Directory Function() tempDirOverride = () => Directory.systemTemp;
+
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -69,6 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
   String? _tempPhotoUrl;
+  Color? _initialPrimaryColor;
 
   /// Per-screen in-flight guard for the `Save Profile` gesture. Drops
   /// re-entrant taps while a previous [ProfileService.updateProfile]
@@ -132,15 +144,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _phoneController = TextEditingController(text: profile.phone);
     _emailController = TextEditingController(text: profile.email);
     _tempPhotoUrl = profile.photoUrl;
+    _initialPrimaryColor = ThemeService.instance.primaryColor;
+    profile.addListener(_onProfileServiceChanged);
   }
 
   @override
   void dispose() {
+    ProfileService.instance.removeListener(_onProfileServiceChanged);
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _saveGate.dispose();
+
+    // Revert preview theme color if user is not Pro and a locked color is still active
+    final ThemeService themeService = ThemeService.instance;
+    final bool isPro = ProfileService.instance.isPro;
+    final bool isGreen = themeService.primaryColor.value == 0xFF1B8A5A || themeService.primaryColor.value == 0xFF10B981;
+    if (_initialPrimaryColor != null) {
+      if (!isPro && !isGreen) {
+        themeService.previewPrimaryColor(_initialPrimaryColor!);
+      } else if (themeService.primaryColor != _initialPrimaryColor) {
+        themeService.setPrimaryColor(themeService.primaryColor);
+      }
+    }
+
     super.dispose();
+  }
+
+  void _onProfileServiceChanged() {
+    if (!mounted) return;
+    final ProfileService profile = ProfileService.instance;
+    if (!_isDirty) {
+      _nameController.text = profile.displayName;
+      _phoneController.text = profile.phone;
+      _emailController.text = profile.email;
+      _tempPhotoUrl = profile.photoUrl;
+    }
   }
 
   @override
@@ -156,11 +195,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ProfileService.instance,
           ThemeService.instance,
           NotificationPreferences.instance,
+          BiometricService.instance,
           _saveGate,
         ]),
         builder: (BuildContext context, Widget? _) {
           final AppColorsExt colors = theme.extension<AppColorsExt>()!;
-          return Scaffold(
+          return PopScope(
+            canPop: !_isDirty,
+            onPopInvokedWithResult: (bool didPop, dynamic result) async {
+              if (didPop) return;
+              final bool shouldPop = await _showDiscardConfirmationSheet();
+              if (shouldPop && context.mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+            child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
               title: const Text(
@@ -260,7 +309,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const AppSectionHeader(label: 'PRIVACY & SECURITY'),
                 AppCard(
                   padding: EdgeInsets.zero,
-                  child: _PrivacySecuritySection(onAction: _showComingSoon),
+                  child: _PrivacySecuritySection(onAction: _onSettingAction),
                 ),
                 SizedBox(height: spacing.xxl),
 
@@ -268,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const AppSectionHeader(label: 'DATA & STORAGE'),
                 AppCard(
                   padding: EdgeInsets.zero,
-                  child: _DataStorageSection(onAction: _showComingSoon),
+                  child: _DataStorageSection(onAction: _onSettingAction),
                 ),
                 SizedBox(height: spacing.xxl),
 
@@ -276,7 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const AppSectionHeader(label: 'PREFERENCES'),
                 AppCard(
                   padding: EdgeInsets.zero,
-                  child: _PreferencesSection(onAction: _showComingSoon),
+                  child: _PreferencesSection(onAction: _onSettingAction),
                 ),
                 SizedBox(height: spacing.xxl),
 
@@ -298,8 +347,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SizedBox(height: spacing.xxl),
               ],
             ),
-          );
-        },
+          ),
+        );
+      },
       ),
     );
   }
@@ -320,6 +370,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_phoneError != null) {
       setState(() => _phoneError = null);
     }
+  }
+
+  Future<bool> _showDiscardConfirmationSheet() async {
+    final bool? confirmed = await AppBottomSheet.show<bool>(
+      context,
+      initialHeightFraction: 0.35,
+      builder: (BuildContext sheetContext) {
+        final ThemeData theme = Theme.of(sheetContext);
+        final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+        final AppTypographyExt typography =
+            theme.extension<AppTypographyExt>()!;
+        final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Discard unsaved changes?',
+              style: typography.headline.copyWith(color: colors.foreground),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: spacing.md),
+            Text(
+              'Any edits you made will be permanently lost.',
+              style: typography.bodyLarge.copyWith(
+                color: colors.foreground.withValues(
+                  alpha: colors.surfaceProminent + 0.4,
+                ),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: spacing.xl),
+            AppGradientButton(
+              label: 'Discard Changes',
+              icon: Icons.delete_outline,
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+            ),
+            SizedBox(height: spacing.md),
+            AppSecondaryButton(
+              label: 'Keep Editing',
+              fullWidth: true,
+              onPressed: () => Navigator.of(sheetContext).pop(false),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
   }
 
   Future<void> _onChangeAvatarPressed() async {
@@ -370,28 +468,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             SizedBox(height: spacing.sm),
             // Grid of preset avatars
-            SizedBox(
-              height: 60,
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 6,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 1.0,
-                ),
-                itemCount: ProfileService.presetAvatars.length,
-                itemBuilder: (BuildContext ctx, int index) {
-                  final String url = ProfileService.presetAvatars[index];
-                  return GestureDetector(
-                    onTap: () => Navigator.of(sheetContext).pop(url),
-                    child: CircleAvatar(
-                      backgroundImage: NetworkImage(url),
-                      backgroundColor: colors.muted,
-                    ),
-                  );
-                },
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 6,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1.0,
               ),
+              itemCount: ProfileService.presetAvatars.length,
+              itemBuilder: (BuildContext ctx, int index) {
+                final String url = ProfileService.presetAvatars[index];
+                return GestureDetector(
+                  onTap: () => Navigator.of(sheetContext).pop(url),
+                  child: CircleAvatar(
+                    backgroundImage: NetworkImage(url),
+                    backgroundColor: colors.muted,
+                  ),
+                );
+              },
             ),
             SizedBox(height: spacing.md),
             AppSecondaryButton(
@@ -485,6 +581,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }
           } catch (e) {
             debugPrint('Error uploading profile picture to Firebase Storage: $e');
+            throw Exception('Failed to upload custom photo. Please check your connection.');
           }
         }
 
@@ -499,10 +596,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _tempPhotoUrl = finalAvatarUrl;
         });
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _saveError = 'Failed to save profile. Please try again.';
+        _saveError = e is Exception
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'Failed to save profile. Please try again.';
       });
     }
   }
@@ -511,26 +610,459 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (label == 'Cloud Sync & API Quota') {
       Navigator.of(context).pushNamed(CloudSyncQuotaScreen.routeName);
     } else {
-      _showComingSoon(label);
+      _onSettingAction(label);
     }
   }
 
-  /// Handler shared across the `PRIVACY & SECURITY`, `DATA & STORAGE`,
-  /// `PREFERENCES`, and `ABOUT & SUPPORT` rows.
-  ///
-  /// These sections render representative entries (`Change password`,
-  /// `Two-factor auth`, `Clear cache`, ...) whose underlying flows are
-  /// outside the scope of the figma-ui-redesign feature. The redesign
-  /// task only requires rendering them via [AppListTile] /
-  /// [AppSectionHeader] (Requirement 6.1); each tap surfaces a
-  /// "coming soon" snackbar with the action's label so the row stays
-  /// visibly interactive without diverging from the spec.
-  void _showComingSoon(String label) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text('$label — coming soon')),
+  Future<void> _showChangePasswordSheet() async {
+    final TextEditingController passwordController = TextEditingController();
+    final TextEditingController confirmController = TextEditingController();
+    String? passwordError;
+    String? confirmError;
+    bool isSaving = false;
+
+    await AppBottomSheet.show<void>(
+      context,
+      initialHeightFraction: 0.55,
+      builder: (BuildContext sheetContext) {
+        final ThemeData theme = Theme.of(sheetContext);
+        final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+        final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+        final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setSheetState) {
+            Future<void> submit() async {
+              final String pass = passwordController.text.trim();
+              final String conf = confirmController.text.trim();
+              
+              setSheetState(() {
+                passwordError = pass.length < 6 ? 'Password must be at least 6 characters' : null;
+                confirmError = pass != conf ? 'Passwords do not match' : null;
+              });
+
+              if (passwordError != null || confirmError != null) return;
+
+              setSheetState(() => isSaving = true);
+              try {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) {
+                  await user.updatePassword(pass);
+                  if (context.mounted) {
+                    Navigator.of(sheetContext).pop();
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(content: Text('Password changed successfully! ✅'), backgroundColor: Colors.green),
+                    );
+                  }
+                } else {
+                  throw 'No authenticated user found.';
+                }
+              } catch (e) {
+                setSheetState(() => isSaving = false);
+                final String errMsg = e.toString();
+                if (errMsg.contains('requires-recent-login')) {
+                  setSheetState(() {
+                    passwordError = 'For security, requires recent login. Sign out & sign back in first.';
+                  });
+                } else {
+                  setSheetState(() {
+                    passwordError = 'Failed: $e';
+                  });
+                }
+              }
+            }
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'Change Password',
+                  style: typography.title.copyWith(color: colors.foreground),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: spacing.md),
+                AppTextField(
+                  controller: passwordController,
+                  label: 'New Password',
+                  obscureText: true,
+                  errorText: passwordError,
+                  enabled: !isSaving,
+                ),
+                SizedBox(height: spacing.md),
+                AppTextField(
+                  controller: confirmController,
+                  label: 'Confirm New Password',
+                  obscureText: true,
+                  errorText: confirmError,
+                  enabled: !isSaving,
+                ),
+                SizedBox(height: spacing.lg),
+                AppGradientButton(
+                  label: 'Update Password',
+                  isLoading: isSaving,
+                  onPressed: isSaving ? null : submit,
+                ),
+                SizedBox(height: spacing.md),
+                AppSecondaryButton(
+                  label: 'Cancel',
+                  fullWidth: true,
+                  onPressed: isSaving ? null : () => Navigator.of(sheetContext).pop(),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _clearCache() async {
+    try {
+      final tempDir = SettingsScreen.tempDirOverride();
+      int deletedCount = 0;
+      int totalSize = 0;
+      if (await tempDir.exists()) {
+        final List<FileSystemEntity> entities = tempDir.listSync(recursive: true);
+        for (final entity in entities) {
+          if (entity is File) {
+            try {
+              totalSize += await entity.length();
+              await entity.delete();
+              deletedCount++;
+            } catch (_) {}
+          }
+        }
+      }
+      final double sizeInMb = totalSize / (1024 * 1024);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cleared $deletedCount cache files (${sizeInMb.toStringAsFixed(2)} MB freed).')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to clear cache: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showStorageUsage() async {
+    try {
+      final dbPath = await getDatabasesPath();
+      final dbFile = File(p.join(dbPath, 'journeys.db'));
+      int dbSize = 0;
+      if (await dbFile.exists()) {
+        dbSize = await dbFile.length();
+      }
+      
+      final tempDir = SettingsScreen.tempDirOverride();
+      int tempSize = 0;
+      if (await tempDir.exists()) {
+        final List<FileSystemEntity> entities = tempDir.listSync(recursive: true);
+        for (final entity in entities) {
+          if (entity is File) {
+            try {
+              tempSize += await entity.length();
+            } catch (_) {}
+          }
+        }
+      }
+
+      final double dbSizeKb = dbSize / 1024;
+      final double tempSizeMb = tempSize / (1024 * 1024);
+      final double totalMb = (dbSize + tempSize) / (1024 * 1024);
+
+      if (mounted) {
+        await AppBottomSheet.show<void>(
+          context,
+          initialHeightFraction: 0.45,
+          builder: (BuildContext sheetContext) {
+            final ThemeData theme = Theme.of(sheetContext);
+            final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+            final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+            final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'Storage Usage',
+                  style: typography.title.copyWith(color: colors.foreground),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: spacing.lg),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Local Database', style: typography.bodyLarge),
+                    Text('${dbSizeKb.toStringAsFixed(1)} KB', style: typography.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                SizedBox(height: spacing.sm),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Temporary Cache', style: typography.bodyLarge),
+                    Text('${tempSizeMb.toStringAsFixed(2)} MB', style: typography.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Divider(height: spacing.xl, color: colors.border),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total Offline Storage', style: typography.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                    Text('${totalMb.toStringAsFixed(2)} MB', style: typography.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: colors.emerald500)),
+                  ],
+                ),
+                SizedBox(height: spacing.xl),
+                AppSecondaryButton(
+                  label: 'Close',
+                  fullWidth: true,
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to read storage: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchHelpEmail() async {
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: 'support@drivecareplus.com',
+      queryParameters: <String, String>{
+        'subject': 'DriveCare+ App Feedback (v1.0.0+1)',
+      },
+    );
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+      } else {
+        throw 'Could not launch email client';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e. Please email support@drivecareplus.com.')),
+        );
+      }
+    }
+  }
+
+  /// Handler shared across rows under settings sections.
+  void _onSettingAction(String label) {
+    if (label == 'Change password') {
+      _showChangePasswordSheet();
+    } else if (label == 'Clear cache') {
+      _clearCache();
+    } else if (label == 'Storage usage') {
+      _showStorageUsage();
+    } else if (label == 'Help & Feedback') {
+      _launchHelpEmail();
+    } else if (label == 'Two-factor auth') {
+      _handleTwoFactorAuth();
+    } else if (label == 'Toggle Biometric') {
+      _handleToggleBiometric();
+    } else {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('$label — coming soon')),
+        );
+    }
+  }
+
+  Future<void> _handleTwoFactorAuth() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User session not found. Please log in again.')),
       );
+      return;
+    }
+
+    final bool isEnabled = ProfileService.instance.isTotpEnabled;
+    if (isEnabled) {
+      final bool? confirm = await AppBottomSheet.show<bool>(
+        context,
+        initialHeightFraction: 0.35,
+        builder: (BuildContext sheetContext) {
+          final ThemeData theme = Theme.of(sheetContext);
+          final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+          final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+          final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                'Disable 2-Step Verification?',
+                style: typography.headline.copyWith(color: colors.foreground),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: spacing.md),
+              Text(
+                'This will reduce your account security. You will no longer be prompted for a code when signing in.',
+                style: typography.bodyLarge.copyWith(
+                  color: colors.foreground.withValues(alpha: 0.7),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: spacing.xl),
+              AppGradientButton(
+                label: 'Disable 2FA',
+                icon: Icons.delete_outline,
+                onPressed: () => Navigator.of(sheetContext).pop(true),
+              ),
+              SizedBox(height: spacing.md),
+              AppSecondaryButton(
+                label: 'Keep 2FA',
+                fullWidth: true,
+                onPressed: () => Navigator.of(sheetContext).pop(false),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirm == true) {
+        try {
+          await TOTPService.instance.disableTotp(user.uid);
+          ProfileService.instance.isTotpEnabled = false;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Two-step verification disabled. 🔓'), backgroundColor: Colors.orange),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to disable: $e')),
+            );
+          }
+        }
+      }
+    } else {
+      final bool? setupSuccess = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => const TOTPSetupScreen(),
+        ),
+      );
+      if (setupSuccess == true) {
+        ProfileService.instance.isTotpEnabled = true;
+      }
+    }
+  }
+
+  Future<void> _handleToggleBiometric() async {
+    final bool isCurrentlyEnabled = BiometricService.instance.isBiometricsEnabled;
+    if (isCurrentlyEnabled) {
+      await BiometricService.instance.setBiometricsEnabled(false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Biometric login disabled.')),
+      );
+    } else {
+      final TextEditingController passwordController = TextEditingController();
+      String? passwordError;
+      bool isSaving = false;
+
+      await AppBottomSheet.show<void>(
+        context,
+        initialHeightFraction: 0.45,
+        builder: (BuildContext sheetContext) {
+          final ThemeData theme = Theme.of(sheetContext);
+          final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+          final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+          final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+
+          return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setSheetState) {
+              Future<void> submit() async {
+                final String pass = passwordController.text.trim();
+                if (pass.isEmpty) {
+                  setSheetState(() => passwordError = 'Password is required');
+                  return;
+                }
+
+                setSheetState(() => isSaving = true);
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  final email = user?.email;
+                  if (user == null || email == null) {
+                    throw Exception('User is not authenticated.');
+                  }
+
+                  final credential = EmailAuthProvider.credential(email: email, password: pass);
+                  await user.reauthenticateWithCredential(credential);
+                  await BiometricService.instance.setBiometricsEnabled(true, email: email, password: pass);
+
+                  if (context.mounted) {
+                    Navigator.of(sheetContext).pop();
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(content: Text('Biometric login enabled successfully! 🔐'), backgroundColor: Colors.green),
+                    );
+                  }
+                } catch (e) {
+                  setSheetState(() {
+                    isSaving = false;
+                    passwordError = 'Verification failed: Incorrect password.';
+                  });
+                }
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    'Confirm Password',
+                    style: typography.title.copyWith(color: colors.foreground),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: spacing.sm),
+                  Text(
+                    'Please enter your password to encrypt and secure your biometric credentials on this device.',
+                    style: typography.body.copyWith(color: colors.foreground.withValues(alpha: 0.7)),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: spacing.md),
+                  AppTextField(
+                    controller: passwordController,
+                    label: 'Password',
+                    obscureText: true,
+                    errorText: passwordError,
+                    enabled: !isSaving,
+                  ),
+                  SizedBox(height: spacing.lg),
+                  AppGradientButton(
+                    label: 'Enable Biometrics',
+                    isLoading: isSaving,
+                    onPressed: isSaving ? null : submit,
+                  ),
+                  SizedBox(height: spacing.md),
+                  AppSecondaryButton(
+                    label: 'Cancel',
+                    fullWidth: true,
+                    onPressed: isSaving ? null : () => Navigator.of(sheetContext).pop(),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    }
   }
 
   /// Handler wired to the `Sign Out` button at the bottom of the
@@ -841,26 +1373,40 @@ class _NotificationsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NotificationPreferences prefs = NotificationPreferences.instance;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _NotificationRow(
-          label: 'Maintenance Reminders',
-          value: prefs.maintenanceReminders,
-          onChanged: prefs.setMaintenanceReminders,
-        ),
-        _NotificationRow(
-          label: 'Booking Confirmations',
-          value: prefs.bookingConfirmations,
-          onChanged: prefs.setBookingConfirmations,
-        ),
-        _NotificationRow(
-          label: 'Weekly Reports',
-          value: prefs.weeklyReports,
-          onChanged: prefs.setWeeklyReports,
-        ),
-      ],
+    return ListenableBuilder(
+      listenable: NotificationPreferences.instance,
+      builder: (BuildContext context, Widget? _) {
+        final NotificationPreferences prefs = NotificationPreferences.instance;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _NotificationRow(
+              label: 'Maintenance Reminders',
+              value: prefs.maintenanceReminders,
+              onChanged: prefs.setMaintenanceReminders,
+              snackbarMessage: (bool v) => v
+                  ? 'You will receive system alerts when car health checks require service.'
+                  : 'System alerts for car health are disabled. You can still check status in the app.',
+            ),
+            _NotificationRow(
+              label: 'Booking Confirmations',
+              value: prefs.bookingConfirmations,
+              onChanged: prefs.setBookingConfirmations,
+              snackbarMessage: (bool v) => v
+                  ? 'You will receive confirmation alerts and scheduled reminders before bookings.'
+                  : 'Booking reminders and confirmation alerts are disabled.',
+            ),
+            _NotificationRow(
+              label: 'Weekly Reports',
+              value: prefs.weeklyReports,
+              onChanged: prefs.setWeeklyReports,
+              snackbarMessage: (bool v) => v
+                  ? 'Weekly report alerts are enabled (coming soon!).'
+                  : 'Weekly report alerts are disabled.',
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -876,11 +1422,13 @@ class _NotificationRow extends StatelessWidget {
   final String label;
   final bool value;
   final Future<void> Function(bool) onChanged;
+  final String Function(bool) snackbarMessage;
 
   const _NotificationRow({
     required this.label,
     required this.value,
     required this.onChanged,
+    required this.snackbarMessage,
   });
 
   @override
@@ -909,6 +1457,14 @@ class _NotificationRow extends StatelessWidget {
               // UI's perspective. Errors degrade gracefully via the
               // service's debugPrint pipeline.
               onChanged(v);
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(snackbarMessage(v)),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
             },
           ),
         ],
@@ -944,8 +1500,16 @@ class _PrivacySecuritySection extends StatelessWidget {
 
     final TextStyle titleStyle =
         typography.bodyLarge.copyWith(color: colors.foreground);
+    final TextStyle subtitleStyle = typography.body.copyWith(
+      color: colors.foreground.withValues(
+        alpha: colors.surfaceProminent + 0.4,
+      ),
+    );
     final Color iconColor =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
+
+    final bool isTotpEnabled = ProfileService.instance.isTotpEnabled;
+    final bool isBiometricEnabled = BiometricService.instance.isBiometricsEnabled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -959,8 +1523,19 @@ class _PrivacySecuritySection extends StatelessWidget {
         AppListTile(
           leading: Icon(Icons.shield_outlined, color: iconColor),
           title: Text('Two-factor auth', style: titleStyle),
+          subtitle: Text(isTotpEnabled ? 'Enabled' : 'Disabled', style: subtitleStyle),
           trailing: Icon(Icons.chevron_right, color: iconColor),
           onTap: () => onAction('Two-factor auth'),
+        ),
+        AppListTile(
+          leading: Icon(Icons.fingerprint_rounded, color: iconColor),
+          title: Text('Biometric login', style: titleStyle),
+          subtitle: Text(isBiometricEnabled ? 'Enabled' : 'Disabled', style: subtitleStyle),
+          trailing: AppToggleSwitch(
+            value: isBiometricEnabled,
+            semanticsLabel: 'Biometric login',
+            onChanged: (bool v) => onAction('Toggle Biometric'),
+          ),
         ),
       ],
     );
@@ -1272,11 +1847,32 @@ class _AppearanceSection extends StatelessWidget {
   Future<void> _onSwatchTap(BuildContext context, Color color) async {
     final bool isGreen = color.value == 0xFF1B8A5A || color.value == 0xFF10B981;
     if (!ProfileService.instance.isPro && !isGreen) {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => const ProSubscriptionSheet(),
-      );
+      // Temporarily preview primary color in memory
+      ThemeService.instance.previewPrimaryColor(color);
+
+      if (context.mounted) {
+        final String colorName = ThemeService.presets.keys.firstWhere(
+          (k) => ThemeService.presets[k] == color,
+          orElse: () => 'Custom Color',
+        );
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('Previewing the $colorName theme. Upgrade to Pro to keep it!'),
+              action: SnackBarAction(
+                label: 'Upgrade',
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (context) => const ProSubscriptionSheet(),
+                  );
+                },
+              ),
+            ),
+          );
+      }
       return;
     }
     try {

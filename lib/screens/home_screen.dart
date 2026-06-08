@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/theme/color_utils.dart';
 import '../services/profile_service.dart';
@@ -37,6 +38,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  DateTime? _lastPressedTime;
 
   // Active Tab bodies
   final List<Widget> _tabs = [
@@ -103,29 +105,59 @@ class _HomeScreenState extends State<HomeScreen> {
     final charcoalColor = isDark ? Colors.white : const Color(0xFF1F2937);
 
     // Point 2: Radial/Linear gradient background depth wrapper
-    return AppBackground(
-      child: Scaffold(
-        extendBody: true,
-        backgroundColor: Colors.transparent, // Allows underlying gradient to shine through!
-        appBar: null,
-        body: _tabs[_currentIndex],
-        // Point 5: Floating Bottom Navigation Pill Shape sitting above the bottom edge
-        bottomNavigationBar: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-            child: AppFloatingBottomNav(
-              currentIndex: _currentIndex,
-              onTap: (i) {
-                setState(() => _currentIndex = i);
-                HomeScreen.activeTabNotifier.value = i;
-              },
-              items: const <NavItem>[
-                NavItem(icon: Icons.speed, label: 'Cockpit'),
-                NavItem(icon: Icons.storefront, label: 'Shops'),
-                NavItem(icon: Icons.directions_car, label: 'My Car'),
-                NavItem(icon: Icons.local_gas_station, label: 'Refuel'),
-                NavItem(icon: Icons.account_balance_wallet, label: 'Wallet'),
-              ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        // If not in home cockpit, navigate to cockpit
+        if (_currentIndex != 0) {
+          setState(() {
+            _currentIndex = 0;
+          });
+          HomeScreen.activeTabNotifier.value = 0;
+          return;
+        }
+
+        // Double back press to exit
+        final now = DateTime.now();
+        if (_lastPressedTime == null || now.difference(_lastPressedTime!) > const Duration(seconds: 2)) {
+          _lastPressedTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Press back again to exit'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+
+        await SystemNavigator.pop();
+      },
+      child: AppBackground(
+        child: Scaffold(
+          extendBody: true,
+          backgroundColor: Colors.transparent, // Allows underlying gradient to shine through!
+          appBar: null,
+          body: _tabs[_currentIndex],
+          // Point 5: Floating Bottom Navigation Pill Shape sitting above the bottom edge
+          bottomNavigationBar: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              child: AppFloatingBottomNav(
+                currentIndex: _currentIndex,
+                onTap: (i) {
+                  setState(() => _currentIndex = i);
+                  HomeScreen.activeTabNotifier.value = i;
+                },
+                items: const <NavItem>[
+                  NavItem(icon: Icons.speed, label: 'Cockpit'),
+                  NavItem(icon: Icons.storefront, label: 'Shops'),
+                  NavItem(icon: Icons.directions_car, label: 'My Car'),
+                  NavItem(icon: Icons.local_gas_station, label: 'Refuel'),
+                  NavItem(icon: Icons.account_balance_wallet, label: 'Wallet'),
+                ],
+              ),
             ),
           ),
         ),

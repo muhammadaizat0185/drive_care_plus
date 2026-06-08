@@ -162,8 +162,17 @@ class _RefuelLogScreenState extends State<RefuelLogScreen>
         // Merge in-memory optimistic entries with remote ones — the
         // optimistic entry will be replaced by the remote copy on
         // the next stream tick.
+        final List<RefuelEntry> uniqueLocal = _entries.where((local) {
+          return !remoteEntries.any((remote) =>
+              remote.distanceKm == local.distanceKm &&
+              remote.liters == local.liters &&
+              remote.pricePerLiter == local.pricePerLiter &&
+              remote.fuelType == local.fuelType &&
+              (remote.date.difference(local.date).inSeconds.abs() < 5));
+        }).toList();
+
         final List<RefuelEntry> all = <RefuelEntry>[
-          ..._entries,
+          ...uniqueLocal,
           ...remoteEntries,
         ];
         return _buildTabs(all);

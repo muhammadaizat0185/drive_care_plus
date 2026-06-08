@@ -4,16 +4,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drive_care_plus/core/theme/app_theme.dart';
 import 'package:drive_care_plus/core/theme/tokens/tokens.dart';
-import 'package:drive_care_plus/screens/settings_screen.dart';
-import 'package:drive_care_plus/screens/vehicle_customizer_screen.dart';
 import 'package:drive_care_plus/screens/home_screen.dart';
 import 'package:drive_care_plus/services/profile_service.dart';
 import 'package:drive_care_plus/services/theme_service.dart';
-import 'package:drive_care_plus/widgets/ui/ui.dart';
+import 'package:drive_care_plus/services/vehicle_insights.dart';
 
 final Uint8List _kTransparentPngBytes = Uint8List.fromList(<int>[
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
@@ -26,8 +25,7 @@ final Uint8List _kTransparentPngBytes = Uint8List.fromList(<int>[
 
 class _TransparentPngHttpOverrides extends HttpOverrides {
   @override
-  HttpClient createHttpClient(SecurityContext? context) =>
-      _FakeHttpClient();
+  HttpClient createHttpClient(SecurityContext? context) => _FakeHttpClient();
 }
 
 class _FakeHttpClient implements HttpClient {
@@ -228,22 +226,65 @@ class _FakeHttpHeaders implements HttpHeaders {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  const MethodChannel activityRecognitionChannel = MethodChannel('flutter_activity_recognition/method');
+  const MethodChannel platformChannel = SystemChannels.platform;
+
+  bool isSystemPopCalled = false;
+
   setUpAll(() {
     HttpOverrides.global = _TransparentPngHttpOverrides();
   });
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+    isSystemPopCalled = false;
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'has_seen_onboarding_guide': true, // Prevent onboarding dialog popup during tests
+    });
+
+    // Mock flutter_activity_recognition permission check
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      activityRecognitionChannel,
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'checkPermission') {
+          return 'DENIED';
+        }
+        if (methodCall.method == 'requestPermission') {
+          return 'DENIED';
+        }
+        return null;
+      },
+    );
+
+    // Mock platform navigator pop to monitor exit trigger
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      platformChannel,
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'SystemNavigator.pop') {
+          isSystemPopCalled = true;
+          return null;
+        }
+        return null;
+      },
+    );
+
+    // Baseline configuration
     ProfileService.instance.isPro = false;
     await ThemeService.instance.setThemeMode(ThemeMode.light);
     await ThemeService.instance.setPrimaryColor(
       ThemeService.presets['Emerald Green']!,
     );
+    await VehicleInsights.instance.clear();
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(activityRecognitionChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(platformChannel, null);
   });
 
   Widget hostApp({required Widget child}) {
-    final ThemeData theme =
-        AppTheme.buildTheme(AppColors.emerald500, Brightness.light);
+    final ThemeData theme = AppTheme.buildTheme(AppColors.emerald500, Brightness.light);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: theme,
@@ -251,66 +292,91 @@ void main() {
     );
   }
 
-  void _configureViewport(WidgetTester tester) {
-    tester.view.physicalSize = const Size(1080, 1920);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-  }
-
-  group('Pro Swatch Gating Widgets Tests', () {
-    testWidgets('Tapping non-green swatch as basic user launches ProSubscriptionSheet', (tester) async {
-      _configureViewport(tester);
-      await tester.pumpWidget(
-        hostApp(child: const SettingsScreen()),
-      );
+  group('HomeScreen Back Button Interception Tests', () {
+    testWidgets('Tapping back on non-zero tabs redirects to Cockpit (index 0)', (tester) async {
+      await tester.pumpWidget(hostApp(child: const HomeScreen()));
       await tester.pumpAndSettle();
 
-      // Ensure APPEARANCE is visible
-      await tester.ensureVisible(
-        find.byWidgetPredicate(
-          (Widget w) => w is AppSectionHeader && w.label == 'APPEARANCE',
-        ),
-      );
+      // Verify initial tab is Cockpit (index 0)
+      expect(HomeScreen.activeTabNotifier.value, equals(0));
+
+      // Switch to a non-zero tab (e.g., Wallet, index 4)
+      HomeScreen.activeTabNotifier.value = 4;
+      await tester.pumpAndSettle();
+      expect(HomeScreen.activeTabNotifier.value, equals(4));
+
+      // Simulate a back press
+      final dynamic popResult = await tester.binding.handlePopRoute();
+      expect(popResult, isTrue); // Intercepted
       await tester.pumpAndSettle();
 
-      // Find locked swatch (e.g. Classic Blue)
-      final classicBlueFinder = find.byWidgetPredicate(
-        (Widget w) => w is GestureDetector && w.child is Center,
-      ).at(3); // classic blue is at index 3
-
-      // Verify that tapping it previews and shows the SnackBar
-      await tester.tap(classicBlueFinder);
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('Previewing the Classic Blue theme.'), findsOneWidget);
-      expect(find.text('Upgrade'), findsOneWidget);
-
-      // Tap the Upgrade SnackBar action
-      await tester.tap(find.text('Upgrade'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(ProSubscriptionSheet), findsOneWidget);
+      // Should redirect to Cockpit (index 0)
+      expect(HomeScreen.activeTabNotifier.value, equals(0));
     });
 
-    testWidgets('Tapping Exora Gold chip as basic user launches ProSubscriptionSheet in Customizer', (tester) async {
-      _configureViewport(tester);
-      await tester.pumpWidget(
-        hostApp(child: const VehicleCustomizerScreen()),
-      );
+    testWidgets('Tapping back on Cockpit once shows snackbar and does not exit', (tester) async {
+      await tester.pumpWidget(hostApp(child: const HomeScreen()));
       await tester.pumpAndSettle();
 
-      // Find the Exora Gold chip
-      final exoraGoldChip = find.byWidgetPredicate(
-        (Widget w) => w is AppCategoryChip && w.label == 'Exora Gold 🔒',
-      );
-      expect(exoraGoldChip, findsOneWidget);
+      // Ensure we are on index 0
+      expect(HomeScreen.activeTabNotifier.value, equals(0));
+      expect(isSystemPopCalled, isFalse);
 
-      // Tap and check for ProSubscriptionSheet
-      await tester.tap(exoraGoldChip);
+      // Simulate first back press
+      final dynamic popResult = await tester.binding.handlePopRoute();
+      expect(popResult, isTrue); // Intercepted
+      await tester.pump(); // Start snackbar animation
+
+      // Should show 'Press back again to exit' snackbar
+      expect(find.text('Press back again to exit'), findsOneWidget);
+      expect(isSystemPopCalled, isFalse);
+    });
+
+    testWidgets('Tapping back twice within 2 seconds exits app via SystemNavigator.pop()', (tester) async {
+      await tester.pumpWidget(hostApp(child: const HomeScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.byType(ProSubscriptionSheet), findsOneWidget);
+      // Ensure we are on index 0
+      expect(HomeScreen.activeTabNotifier.value, equals(0));
+
+      // First back press
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(find.text('Press back again to exit'), findsOneWidget);
+      expect(isSystemPopCalled, isFalse);
+
+      // Second back press immediately
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+
+      // Should trigger native app exit
+      expect(isSystemPopCalled, isTrue);
+    });
+
+    testWidgets('Tapping back twice with more than 2 seconds interval does not exit', (tester) async {
+      await tester.pumpWidget(hostApp(child: const HomeScreen()));
+      await tester.pumpAndSettle();
+
+      // Ensure we are on index 0
+      expect(HomeScreen.activeTabNotifier.value, equals(0));
+
+      // First back press
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(find.text('Press back again to exit'), findsOneWidget);
+      expect(isSystemPopCalled, isFalse);
+
+      // Wait more than 2 seconds (e.g. 2.1 seconds physically to update wall-clock time)
+      await Future.delayed(const Duration(milliseconds: 2100));
+      await tester.pump();
+
+      // Second back press after wait
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+
+      // Should show snackbar again, not exit
+      expect(find.text('Press back again to exit'), findsOneWidget);
+      expect(isSystemPopCalled, isFalse);
     });
   });
 }
