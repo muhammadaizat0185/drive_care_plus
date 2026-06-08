@@ -18,6 +18,7 @@ class ProfileService extends ChangeNotifier {
   List<Map<String, dynamic>> _transactions = [];
   bool _isPro = false;
   DateTime? _subscriptionExpiry;
+  bool _isTotpEnabled = false;
 
   String get displayName => _displayName;
   String get photoUrl => _photoUrl;
@@ -35,6 +36,11 @@ class ProfileService extends ChangeNotifier {
   bool get isPro => _isPro;
   set isPro(bool value) {
     _isPro = value;
+    notifyListeners();
+  }
+  bool get isTotpEnabled => _isTotpEnabled;
+  set isTotpEnabled(bool value) {
+    _isTotpEnabled = value;
     notifyListeners();
   }
   DateTime? get subscriptionExpiry => _subscriptionExpiry;
@@ -62,6 +68,7 @@ class ProfileService extends ChangeNotifier {
           final data = doc.data()!;
           _walletBalance = (data['wallet_balance'] as num?)?.toDouble() ?? 0.0;
           _isPro = data['is_pro'] ?? false;
+          _isTotpEnabled = data['totp_enabled'] ?? false;
           if (data['subscription_expiry'] != null) {
             _subscriptionExpiry = (data['subscription_expiry'] as Timestamp).toDate();
           }
@@ -206,6 +213,7 @@ class ProfileService extends ChangeNotifier {
     _transactions = [];
     _isPro = false;
     _subscriptionExpiry = null;
+    _isTotpEnabled = false;
     notifyListeners();
 
     try {

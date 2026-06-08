@@ -55,6 +55,7 @@ import 'package:drive_care_plus/widgets/ui/app_gradient_button.dart';
 import 'package:drive_care_plus/widgets/ui/app_secondary_button.dart';
 import 'package:drive_care_plus/widgets/ui/app_section_header.dart';
 import 'package:drive_care_plus/widgets/ui/app_text_field.dart';
+import 'package:drive_care_plus/widgets/ui/app_toggle_switch.dart';
 import 'package:drive_care_plus/widgets/ui/types.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -329,6 +330,8 @@ Future<void> _resetProfileService() async {
 }
 
 void main() {
+  late Directory testTempDir;
+
   // Install network-image override once for the whole suite.
   setUpAll(() {
     HttpOverrides.global = _TransparentPngHttpOverrides();
@@ -345,6 +348,19 @@ void main() {
       ThemeService.presets.values.first,
     );
     await _resetProfileService();
+
+    // Create a sandboxed temporary directory for tests
+    testTempDir = Directory.systemTemp.createTempSync('drive_care_plus_test_');
+    SettingsScreen.tempDirOverride = () => testTempDir;
+  });
+
+  tearDown(() {
+    try {
+      if (testTempDir.existsSync()) {
+        testTempDir.deleteSync(recursive: true);
+      }
+    } catch (_) {}
+    SettingsScreen.tempDirOverride = () => Directory.systemTemp;
   });
 
   // -------------------------------------------------------------------
@@ -633,6 +649,205 @@ void main() {
         // the sheet is fully dismissed (otherwise the existing sheet
         // would intercept the tap).
         expect(find.text('Sign out of DriveCare+?'), findsNothing);
+      },
+    );
+  });
+
+  group('Back navigation safeguard', () {
+    testWidgets(
+      'PopScope is configured correctly based on dirty state',
+      (tester) async {
+        await _pumpSettings(tester);
+
+        // Initially form is clean, so canPop should be true.
+        final Finder popScopeFinder = find.byType(PopScope);
+        expect(popScopeFinder, findsOneWidget);
+
+        PopScope popScope = tester.widget<PopScope>(popScopeFinder);
+        expect(popScope.canPop, isTrue);
+
+        // Edit name to make the screen dirty.
+        await tester.enterText(
+          find.byType(AppTextField).at(0),
+          'A Different Name',
+        );
+        await tester.pump();
+
+        // PopScope canPop should be false.
+        popScope = tester.widget<PopScope>(popScopeFinder);
+        expect(popScope.canPop, isFalse);
+      },
+    );
+
+    testWidgets(
+      'invoking onPopInvokedWithResult when dirty shows discard confirmation sheet',
+      (tester) async {
+        await _pumpSettings(tester);
+
+        // Edit name to make screen dirty
+        await tester.enterText(
+          find.byType(AppTextField).at(0),
+          'A Different Name',
+        );
+        await tester.pump();
+
+        final Finder popScopeFinder = find.byType(PopScope);
+        final PopScope popScope = tester.widget<PopScope>(popScopeFinder);
+
+        // Trigger pop invoked
+        popScope.onPopInvokedWithResult?.call(false, null);
+        await tester.pumpAndSettle();
+
+        // The sheet must contain confirmation buttons.
+        expect(find.text('Discard unsaved changes?'), findsOneWidget);
+        expect(
+          find.byWidgetPredicate(
+            (Widget w) => w is AppGradientButton && w.label == 'Discard Changes',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byWidgetPredicate(
+            (Widget w) => w is AppSecondaryButton && w.label == 'Keep Editing',
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+  });
+
+  group('Notifications toggle', () {
+    testWidgets(
+      'toggling a notification setting updates the switch visually and shows an explanation SnackBar',
+      (tester) async {
+        await _pumpSettings(tester);
+
+        // Scroll the NOTIFICATIONS section into view so it is rendered
+        await tester.ensureVisible(
+          find.byWidgetPredicate(
+            (Widget w) =>
+                w is AppSectionHeader && w.label == 'NOTIFICATIONS',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Verify initial state of a toggle. Find the specific 'Maintenance Reminders' AppToggleSwitch by semanticsLabel.
+        final Finder toggleFinder = find.byWidgetPredicate(
+          (Widget w) => w is AppToggleSwitch && w.semanticsLabel == 'Maintenance Reminders',
+        );
+        expect(toggleFinder, findsOneWidget);
+        AppToggleSwitch toggle = tester.widget<AppToggleSwitch>(toggleFinder);
+        expect(toggle.value, isTrue);
+
+        // Tap the toggle (sets to false)
+        await tester.tap(toggleFinder);
+        await tester.pumpAndSettle();
+
+        // Verify that the toggle value is now false visually in the widget tree
+        toggle = tester.widget<AppToggleSwitch>(toggleFinder);
+        expect(toggle.value, isFalse);
+
+        // Verify it was persisted in the singleton
+        expect(NotificationPreferences.instance.maintenanceReminders, isFalse);
+
+        // Verify SnackBar explanation is displayed
+        expect(
+          find.text('System alerts for car health are disabled. You can still check status in the app.'),
+          findsOneWidget,
+        );
+
+        // Tap the toggle again (sets to true)
+        await tester.tap(toggleFinder);
+        await tester.pumpAndSettle();
+
+        // Verify SnackBar explanation is displayed
+        expect(
+          find.text('You will receive system alerts when car health checks require service.'),
+          findsOneWidget,
+        );
+      },
+    );
+  });
+
+  group('Privacy & Security setting actions', () {
+    testWidgets(
+      'tapping Change password opens the bottom sheet with Change Password title',
+      (tester) async {
+        await _pumpSettings(tester);
+
+        await tester.ensureVisible(find.text('Change password'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Change password'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Change Password'), findsOneWidget);
+        expect(find.widgetWithText(AppGradientButton, 'Update Password'), findsOneWidget);
+        expect(find.widgetWithText(AppSecondaryButton, 'Cancel'), findsOneWidget);
+      },
+    );
+  });
+
+  group('Data & Storage setting actions', () {
+    testWidgets(
+      'tapping Clear cache triggers cache clearing and shows a success SnackBar',
+      (tester) async {
+        // Write a dummy cache file to ensure the list/delete operations have work to do.
+        final dummyFile = File('${testTempDir.path}/dummy.txt');
+        dummyFile.writeAsStringSync('dummy cache content');
+
+        await _pumpSettings(tester);
+
+        await tester.ensureVisible(find.text('Clear cache'));
+        await tester.pumpAndSettle();
+
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Clear cache'));
+          await Future.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Cleared 1 cache files'), findsOneWidget);
+      },
+    );
+  });
+
+  group('Theme Swatch Preview', () {
+    testWidgets(
+      'tapping a locked swatch previews the color and reverts it when SettingsScreen is popped/disposed',
+      (tester) async {
+        ProfileService.instance.isPro = false;
+        await ThemeService.instance.setPrimaryColor(const Color(0xFF1B8A5A));
+
+        await _pumpSettings(tester);
+
+        await tester.ensureVisible(find.byWidgetPredicate(
+          (Widget w) => w is AppSectionHeader && w.label == 'APPEARANCE',
+        ));
+        await tester.pumpAndSettle();
+
+        final Finder lockedSwatchFinder = find.byWidgetPredicate(
+          (Widget w) => w is GestureDetector && w.child is Center && (w.child as Center).child is SizedBox && 
+              ((w.child as Center).child as SizedBox).child is Center &&
+              (((w.child as Center).child as SizedBox).child as Center).child is Container &&
+              ((((w.child as Center).child as SizedBox).child as Center).child as Container).decoration is BoxDecoration &&
+              (((((w.child as Center).child as SizedBox).child as Center).child as Container).decoration as BoxDecoration).gradient != null
+        ).at(2);
+
+        await tester.tap(lockedSwatchFinder);
+        await tester.pumpAndSettle();
+
+        expect(ThemeService.instance.primaryColor.value, 0xFF0F766E);
+        expect(find.textContaining('Previewing the Teal Ocean theme.'), findsOneWidget);
+
+        final Finder popScopeFinder = find.byType(PopScope);
+        final PopScope popScope = tester.widget<PopScope>(popScopeFinder);
+        
+        popScope.onPopInvokedWithResult?.call(true, null);
+        
+        Navigator.of(tester.element(popScopeFinder)).pop();
+        await tester.pumpAndSettle();
+
+        expect(ThemeService.instance.primaryColor.value, 0xFF1B8A5A);
       },
     );
   });

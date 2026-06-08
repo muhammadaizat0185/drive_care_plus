@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'profile_service.dart';
 import 'vehicle_insights.dart';
 import 'notification_service.dart';
@@ -80,6 +81,12 @@ class AuthCleanupService {
       await NotificationPreferences.instance.init();
       await NotificationService.instance.init();
       await VehicleInsights.instance.loadFromPrefs();
+      
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await VehicleInsights.instance.syncFromFirestore(user.uid);
+      }
+      
       debugPrint('AuthCleanupService: User data services initialized successfully.');
     } catch (e) {
       debugPrint('AuthCleanupService Error: initializing user data: $e');

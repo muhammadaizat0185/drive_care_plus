@@ -55,6 +55,12 @@ class ThemeService extends ChangeNotifier {
     }
   }
 
+  // Update primary color in memory without persisting (for trial preview)
+  void previewPrimaryColor(Color color) {
+    _primaryColor = color;
+    notifyListeners();
+  }
+
   // Update and persist theme mode
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;

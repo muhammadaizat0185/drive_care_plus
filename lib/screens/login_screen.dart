@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_tracker_service.dart';
 import '../services/auth_cleanup_service.dart';
+import '../services/biometric_service.dart';
+import '../services/totp_service.dart';
+import 'totp_verification_screen.dart';
 
 import '../core/theme/color_utils.dart';
 
@@ -132,14 +135,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loadBiometricAvailability() async {
     bool available = false;
     try {
-      final bool canCheck = await _canCheckBiometrics();
-      if (canCheck) {
-        final SharedPreferences prefs = await SharedPreferences.getInstance();
-        final String? token = prefs.getString(_biometricSessionTokenKey);
-        available = token != null && token.isNotEmpty;
+      final bool canAuth = await BiometricService.instance.canAuthenticate();
+      if (canAuth) {
+        available = BiometricService.instance.isBiometricsEnabled;
       }
     } catch (_) {
-      // Defensive: any failure → hide the button (Requirement 5.13).
       available = false;
     }
     if (!mounted) return;
@@ -148,27 +148,71 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Pluggable device-level biometric capability check. The current
-  /// project does not depend on `local_auth` (the LocalAuthentication
-  /// plugin), so this returns `false` and the `Biometric` button
-  /// stays hidden across every device. When `local_auth` is added,
-  /// replace the body with:
-  ///
-  ///     return await LocalAuthentication().canCheckBiometrics;
-  ///
-  /// The conditional render in [build] is unchanged by that swap
-  /// (Requirements 5.11, 5.13).
-  Future<bool> _canCheckBiometrics() async {
-    return false;
+  Future<void> _handlePostLoginRouting(String uid) async {
+    final bool isTotpEnabled = await TOTPService.instance.checkIsTotpEnabled(uid);
+    if (isTotpEnabled) {
+      if (!mounted) return;
+      final bool? verified = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TOTPVerificationScreen(uid: uid),
+        ),
+      );
+      if (verified != true) {
+        _showSnackbar('Two-step verification cancelled or failed.');
+        return;
+      }
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_offline_logged_in', true);
+    } catch (_) {}
+    await AuthCleanupService.initializeUserData();
+    if (mounted) {
+      Navigator.pushReplacementNamed(context, HomeScreen.routeName);
+    }
   }
 
-  /// Handler wired to the `Biometric` [AppSecondaryButton]. Once the
-  /// `local_auth` plugin is integrated, this method delegates to the
-  /// existing biometric login flow per Requirement 5.12. Until then,
-  /// it surfaces a placeholder snackbar so the affordance never lands
-  /// in production without its underlying flow.
-  void _onBiometric() {
-    _showSnackbar('Biometric login coming soon');
+  Future<void> _onBiometric() async {
+    final bool canAuth = await BiometricService.instance.canAuthenticate();
+    if (!canAuth) {
+      _showSnackbar('Biometrics not available or not set up on this device.');
+      return;
+    }
+
+    final bool authenticated = await BiometricService.instance.authenticateLocal();
+    if (!authenticated) {
+      _showSnackbar('Biometric verification failed.');
+      return;
+    }
+
+    final credentials = await BiometricService.instance.getStoredCredentials();
+    if (credentials == null) {
+      _showSnackbar('Secure credentials not found. Please log in manually once.');
+      return;
+    }
+
+    final String email = credentials['email']!;
+    final String password = credentials['password']!;
+
+    await _signInGate.run<void>(() async {
+      try {
+        ApiTracker.instance.trackCall('Firebase Core');
+        final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        final user = userCredential.user;
+        if (user != null) {
+          await _handlePostLoginRouting(user.uid);
+        }
+      } on FirebaseAuthException catch (e) {
+        _showSnackbar(e.message ?? 'Biometric sign in failed.');
+      } catch (e) {
+        _showSnackbar('Biometric sign in failed: $e');
+      }
+    });
   }
 
   @override
@@ -203,17 +247,16 @@ class _LoginScreenState extends State<LoginScreen> {
     await _signInGate.run<void>(() async {
       try {
         ApiTracker.instance.trackCall('Firebase Core');
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('is_offline_logged_in', true);
-        } catch (_) {}
-        await AuthCleanupService.initializeUserData();
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, HomeScreen.routeName);
+        final user = userCredential.user;
+        if (user != null) {
+          if (BiometricService.instance.isBiometricsEnabled) {
+            await BiometricService.instance.setBiometricsEnabled(true, email: email, password: password);
+          }
+          await _handlePostLoginRouting(user.uid);
         }
       } on FirebaseAuthException catch (e) {
         _showSnackbar(e.message ?? 'Authentication failed.');
