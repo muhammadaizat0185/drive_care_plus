@@ -484,84 +484,94 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
             left: spacing.lg,
             right: spacing.lg,
             child: SafeArea(
-              child: Column(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
+                    margin: EdgeInsets.only(top: spacing.xs), // Align button with search field center
                     decoration: BoxDecoration(
                       color: colors.card,
-                      borderRadius: BorderRadius.circular(radii.large),
+                      shape: BoxShape.circle,
                       border: Border.all(color: colors.border),
                       boxShadow: shadows.medium,
                     ),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: spacing.md),
-                      child: AppTextField(
-                        controller: _searchController,
-                        hintText: 'Search destination...',
-                        prefixIcon: Icons.search,
-                        onChanged: _onSearchChanged,
-                      ),
+                    child: AppIconButton(
+                      icon: Icons.arrow_back,
+                      semanticsLabel: 'Back',
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  if (_placePredictions.isNotEmpty)
-                    Container(
-                      margin: EdgeInsets.only(top: spacing.sm),
-                      decoration: BoxDecoration(
-                        color: colors.card,
-                        borderRadius: BorderRadius.circular(radii.large),
-                        border: Border.all(color: colors.border),
-                        boxShadow: shadows.medium,
-                      ),
-                      constraints: const BoxConstraints(
-                        maxHeight: _predictionsMaxHeight,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(radii.large),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.zero,
-                          itemCount: _placePredictions.length,
-                          separatorBuilder: (_, _) => Divider(
-                            height: 1,
-                            indent: spacing.lg,
-                            endIndent: spacing.lg,
-                            color: colors.border,
+                  SizedBox(width: spacing.sm),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: colors.card,
+                            borderRadius: BorderRadius.circular(radii.large),
+                            border: Border.all(color: colors.border),
+                            boxShadow: shadows.medium,
                           ),
-                          itemBuilder: (context, index) {
-                            final place = _placePredictions[index];
-                            return AppListTile(
-                              leading: Icon(
-                                Icons.location_on_outlined,
-                                color: colors.emerald500,
-                                size: typography.bodyLarge.fontSize,
-                              ),
-                              title: Text(
-                                place['description'],
-                                style: typography.body.copyWith(
-                                  color: colors.foreground,
-                                ),
-                              ),
-                              onTap: () => _selectPlace(
-                                  place['place_id'], place['description']),
-                            );
-                          },
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: spacing.md),
+                            child: AppTextField(
+                              controller: _searchController,
+                              hintText: 'Search destination...',
+                              prefixIcon: Icons.search,
+                              onChanged: _onSearchChanged,
+                            ),
+                          ),
                         ),
-                      ),
+                        if (_placePredictions.isNotEmpty)
+                          Container(
+                            margin: EdgeInsets.only(top: spacing.sm),
+                            decoration: BoxDecoration(
+                              color: colors.card,
+                              borderRadius: BorderRadius.circular(radii.large),
+                              border: Border.all(color: colors.border),
+                              boxShadow: shadows.medium,
+                            ),
+                            constraints: const BoxConstraints(
+                              maxHeight: _predictionsMaxHeight,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(radii.large),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                padding: EdgeInsets.zero,
+                                itemCount: _placePredictions.length,
+                                separatorBuilder: (_, _) => Divider(
+                                  height: 1,
+                                  indent: spacing.lg,
+                                  endIndent: spacing.lg,
+                                  color: colors.border,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final place = _placePredictions[index];
+                                  return AppListTile(
+                                    leading: Icon(
+                                      Icons.location_on_outlined,
+                                      color: colors.emerald500,
+                                      size: typography.bodyLarge.fontSize,
+                                    ),
+                                    title: Text(
+                                      place['description'],
+                                      style: typography.body.copyWith(
+                                        color: colors.foreground,
+                                      ),
+                                    ),
+                                    onTap: () => _selectPlace(
+                                        place['place_id'], place['description']),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
+                  ),
                 ],
-              ),
-            ),
-          ),
-
-          // Back Floating Arrow Button.
-          Positioned(
-            top: spacing.xl,
-            left: spacing.xl,
-            child: SafeArea(
-              child: AppIconButton(
-                icon: Icons.arrow_back,
-                semanticsLabel: 'Back',
-                onPressed: () => Navigator.pop(context),
               ),
             ),
           ),

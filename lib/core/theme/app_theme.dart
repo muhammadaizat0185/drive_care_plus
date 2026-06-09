@@ -157,7 +157,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: AppTypography.title.copyWith(color: foreground),
+        titleTextStyle: AppTypography.headline.copyWith(color: foreground),
         iconTheme: IconThemeData(color: foreground),
       ),
       // ----------------------------------------------------------------------

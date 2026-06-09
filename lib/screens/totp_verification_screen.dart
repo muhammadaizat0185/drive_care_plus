@@ -97,7 +97,10 @@ class _TOTPVerificationScreenState extends State<TOTPVerificationScreen> {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: const Text('2-Step Verification'),
+            title: Text(
+              '2-Step Verification',
+              style: typography.headline.copyWith(color: colors.foreground),
+            ),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: _isSaving ? null : _cancelVerification,

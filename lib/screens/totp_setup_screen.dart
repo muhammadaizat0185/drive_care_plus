@@ -119,7 +119,10 @@ class _TOTPSetupScreenState extends State<TOTPSetupScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('Setup 2-Step Verification'),
+          title: Text(
+            'Setup 2-Step Verification',
+            style: typography.headline.copyWith(color: colors.foreground),
+          ),
         ),
         body: ListView(
           padding: EdgeInsets.symmetric(

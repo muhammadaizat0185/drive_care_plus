@@ -33,7 +33,8 @@ import '../services/vehicle_insights.dart';
 import '../services/workshop_firebase_service.dart';
 import '../widgets/ui/ui.dart';
 import 'booking/_widgets.dart';
-import 'workshops/_edit_booking_sheet.dart';
+import 'workshops/_booking_details_sheet.dart';
+import 'workshops/_booking_history_tab.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -73,6 +74,10 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+
     // Also support fallback route arguments if needed (Requirement 14.5).
     final int argTab =
         (ModalRoute.of(context)?.settings.arguments as int?) ?? _selectedIndex;
@@ -80,12 +85,15 @@ class _BookingScreenState extends State<BookingScreen> {
     return AppBackground(
       child: DefaultTabController(
         key: ValueKey(argTab),
-        length: 2,
+        length: 3,
         initialIndex: argTab,
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: const Text('Workshops & Bookings'),
+            title: Text(
+              'Workshops & Bookings',
+              style: typography.headline.copyWith(color: colors.foreground),
+            ),
             bottom: const TabBar(
               tabs: [
                 Tab(
@@ -96,6 +104,10 @@ class _BookingScreenState extends State<BookingScreen> {
                   icon: Icon(Icons.event_available_outlined),
                   text: 'My Bookings',
                 ),
+                Tab(
+                  icon: Icon(Icons.history_outlined),
+                  text: 'Booking History',
+                ),
               ],
             ),
           ),
@@ -103,6 +115,7 @@ class _BookingScreenState extends State<BookingScreen> {
             children: [
               _FindWorkshopsTab(),
               _MyBookingsTab(),
+              _BookingHistoryTab(),
             ],
           ),
         ),
@@ -425,10 +438,36 @@ class _FindWorkshopsTabState extends State<_FindWorkshopsTab> {
   }
 }
 
+bool _isPastBooking(Map<String, dynamic> booking) {
+  final dateStr = booking['date']?.toString() ?? '';
+  if (dateStr.isEmpty) return false;
+
+  // Custom date parsing
+  DateTime? parsedDate = DateTime.tryParse(dateStr);
+  if (parsedDate == null) {
+    final parts = dateStr.split('/');
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        parsedDate = DateTime(year, month, day);
+      }
+    }
+  }
+
+  if (parsedDate == null) return false;
+
+  final today = DateTime.now();
+  final bookingDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
+  final todayDate = DateTime(today.year, today.month, today.day);
+  return bookingDate.isBefore(todayDate);
+}
+
 class _MyBookingsTab extends StatelessWidget {
   const _MyBookingsTab();
 
-  void _onBookingTap(BuildContext context, Map<String, dynamic> booking) {
+  void _onBookingTap(BuildContext context, Map<String, dynamic> booking, {BookingSheetMode initialMode = BookingSheetMode.details}) {
     final String firestoreId = booking['id']?.toString() ?? '';
     final String localId = booking['id']?.toString() ?? booking['workshopId']?.toString() ?? '';
 
@@ -439,27 +478,28 @@ class _MyBookingsTab extends StatelessWidget {
     AppBottomSheet.show<void>(
       context,
       initialHeightFraction: 0.65,
-      builder: (BuildContext sheetCtx) => EditBookingBottomSheet(
+      builder: (BuildContext sheetCtx) => BookingDetailsBottomSheet(
         booking: booking,
+        initialMode: initialMode,
         onSave: (Map<String, dynamic> updates) async {
           Navigator.of(sheetCtx).pop(); // Close sheet
           try {
             // SharedPreferences local updates
             final Map<String, dynamic> localUpdates = <String, dynamic>{
-              'serviceName': updates['serviceName'],
-              'status': updates['status'],
-              'date': updates['localDate'],
-              'time': updates['localTime'],
+              'serviceName': updates['serviceName'] ?? booking['serviceName'],
+              'status': updates['status'] ?? booking['status'],
+              'date': updates['localDate'] ?? _formatIsoDate(updates['date'] ?? booking['date'] ?? ''),
+              'time': updates['localTime'] ?? (updates['time'] ?? booking['time'] ?? ''),
             };
             await VehicleInsights.instance.updateBooking(localId, localUpdates);
 
             // Firestore updates (if firestore ID is present)
             if (firestoreId.isNotEmpty) {
               final Map<String, dynamic> firestoreUpdates = <String, dynamic>{
-                'serviceName': updates['serviceName'],
-                'status': updates['status'],
-                'date': updates['date'],
-                'time': updates['time'],
+                'serviceName': updates['serviceName'] ?? booking['serviceName'],
+                'status': updates['status'] ?? booking['status'],
+                'date': updates['date'] ?? booking['date'],
+                'time': updates['time'] ?? booking['time'],
               };
               await firebaseService.updateBooking(firestoreId, firestoreUpdates);
             }
@@ -481,6 +521,12 @@ class _MyBookingsTab extends StatelessWidget {
     );
   }
 
+  String _formatIsoDate(String iso) {
+    final DateTime? parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    return '${parsed.day}/${parsed.month}/${parsed.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -491,7 +537,13 @@ class _MyBookingsTab extends StatelessWidget {
       builder: (context, child) {
         final bookings = VehicleInsights.instance.bookings;
 
-        if (bookings.isEmpty) {
+        final upcomingBookings = bookings.where((b) {
+          final String status = (b['status'] ?? 'Pending').toString().toLowerCase();
+          final bool isPast = _isPastBooking(b);
+          return status != 'cancelled' && status != 'finished' && !isPast;
+        }).toList();
+
+        if (upcomingBookings.isEmpty) {
           return const AppEmptyState(
             icon: Icons.event_busy_outlined,
             title: 'No appointments booked',
@@ -502,15 +554,149 @@ class _MyBookingsTab extends StatelessWidget {
 
         return ListView.separated(
           padding: EdgeInsets.all(spacing.lg),
-          itemCount: bookings.length,
+          itemCount: upcomingBookings.length,
           separatorBuilder: (_, _) => SizedBox(height: spacing.md),
           itemBuilder: (context, index) {
-            final booking = bookings[index];
+            final booking = upcomingBookings[index];
             return BookingConfirmedCard(
               booking: booking,
               onTap: () => _onBookingTap(context, booking),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+class _BookingHistoryTab extends StatelessWidget {
+  const _BookingHistoryTab();
+
+  void _onBookingTap(BuildContext context, Map<String, dynamic> booking, {BookingSheetMode initialMode = BookingSheetMode.details}) {
+    final String firestoreId = booking['id']?.toString() ?? '';
+    final String localId = booking['id']?.toString() ?? booking['workshopId']?.toString() ?? '';
+
+    if (localId.isEmpty) return;
+
+    final WorkshopFirebaseService firebaseService = WorkshopFirebaseService();
+
+    AppBottomSheet.show<void>(
+      context,
+      initialHeightFraction: 0.65,
+      builder: (BuildContext sheetCtx) => BookingDetailsBottomSheet(
+        booking: booking,
+        initialMode: initialMode,
+        onSave: (Map<String, dynamic> updates) async {
+          Navigator.of(sheetCtx).pop(); // Close sheet
+          try {
+            // SharedPreferences local updates
+            final Map<String, dynamic> localUpdates = <String, dynamic>{
+              'serviceName': updates['serviceName'] ?? booking['serviceName'],
+              'status': updates['status'] ?? booking['status'],
+              'date': updates['localDate'] ?? _formatIsoDate(updates['date'] ?? booking['date'] ?? ''),
+              'time': updates['localTime'] ?? (updates['time'] ?? booking['time'] ?? ''),
+            };
+            await VehicleInsights.instance.updateBooking(localId, localUpdates);
+
+            // Firestore updates (if firestore ID is present)
+            if (firestoreId.isNotEmpty) {
+              final Map<String, dynamic> firestoreUpdates = <String, dynamic>{
+                'serviceName': updates['serviceName'] ?? booking['serviceName'],
+                'status': updates['status'] ?? booking['status'],
+                'date': updates['date'] ?? booking['date'],
+                'time': updates['time'] ?? booking['time'],
+              };
+              await firebaseService.updateBooking(firestoreId, firestoreUpdates);
+            }
+
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Booking updated successfully')),
+              );
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to update booking: $e')),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  String _formatIsoDate(String iso) {
+    final DateTime? parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    return '${parsed.day}/${parsed.month}/${parsed.year}';
+  }
+
+  Future<void> _onConfirmFinished(BuildContext context, String bookingId) async {
+    final WorkshopFirebaseService firebaseService = WorkshopFirebaseService();
+    try {
+      await VehicleInsights.instance.updateBooking(bookingId, {'status': 'Finished'});
+      if (bookingId.isNotEmpty) {
+        await firebaseService.updateBooking(bookingId, {'status': 'Finished'});
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking marked as Finished')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update booking: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _onConfirmCancelled(BuildContext context, String bookingId) async {
+    final WorkshopFirebaseService firebaseService = WorkshopFirebaseService();
+    try {
+      await VehicleInsights.instance.updateBooking(bookingId, {'status': 'Cancelled'});
+      if (bookingId.isNotEmpty) {
+        await firebaseService.updateBooking(bookingId, {'status': 'Cancelled'});
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking marked as Cancelled')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update booking: $e')),
+        );
+      }
+    }
+  }
+
+  void _onRescheduleFromHistory(BuildContext context, Map<String, dynamic> booking) {
+    _onBookingTap(context, booking, initialMode: BookingSheetMode.edit);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: VehicleInsights.instance,
+      builder: (context, child) {
+        final bookings = VehicleInsights.instance.bookings;
+
+        final historyBookings = bookings.where((b) {
+          final String status = (b['status'] ?? 'Pending').toString().toLowerCase();
+          final bool isPast = _isPastBooking(b);
+          return status == 'cancelled' || status == 'finished' || isPast;
+        }).toList();
+
+        return BookingHistoryTab(
+          bookings: historyBookings,
+          onTap: (booking) => _onBookingTap(context, booking),
+          onConfirmFinished: (id) => _onConfirmFinished(context, id),
+          onConfirmCancelled: (id) => _onConfirmCancelled(context, id),
+          onReschedule: (booking) => _onRescheduleFromHistory(context, booking),
         );
       },
     );

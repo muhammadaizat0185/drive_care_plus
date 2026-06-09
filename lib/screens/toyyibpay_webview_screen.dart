@@ -117,7 +117,7 @@ class _ToyyibPayWebViewScreenState extends State<ToyyibPayWebViewScreen> {
         appBar: AppBar(
           title: Text(
             'ToyyibPay FPX Payment',
-            style: typography.title.copyWith(color: colors.foreground),
+            style: typography.headline.copyWith(color: colors.foreground),
           ),
           leading: AppIconButton(
             icon: Icons.arrow_back,

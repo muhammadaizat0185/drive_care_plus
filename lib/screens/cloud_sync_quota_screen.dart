@@ -111,7 +111,7 @@ class _CloudSyncQuotaScreenState extends State<CloudSyncQuotaScreen> {
         appBar: AppBar(
           title: Text(
             'Sync & API Telemetry',
-            style: typography.title.copyWith(color: colors.foreground, fontWeight: FontWeight.bold),
+            style: typography.headline.copyWith(color: colors.foreground),
           ),
           actions: [
             IconButton(
