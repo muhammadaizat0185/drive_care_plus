@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/profile_service.dart';
 import '../services/toyyibpay_service.dart';
 import '../screens/toyyibpay_webview_screen.dart';
+import '../services/notification_service.dart';
 
 class WalletTopUpSheet extends StatefulWidget {
   const WalletTopUpSheet({super.key});
@@ -90,6 +91,14 @@ class _WalletTopUpSheetState extends State<WalletTopUpSheet> {
           'top_up', 
           'Wallet Top-up via ToyyibPay (Bill: $billCode)'
         );
+        try {
+          await NotificationService.instance.showMoneyFlowNotification(
+            title: 'Wallet Top-up Successful',
+            body: 'RM ${amount.toStringAsFixed(2)} successfully added to your wallet.',
+          );
+        } catch (e) {
+          debugPrint('Error triggering top-up notification: $e');
+        }
         
         if (mounted) {
           Navigator.pop(context); // Close the bottom sheet
@@ -102,6 +111,12 @@ class _WalletTopUpSheetState extends State<WalletTopUpSheet> {
         }
       } else if (result == false) {
         // Failed / Canceled
+        await ProfileService.instance.addWalletTransaction(
+          amount, 
+          'top_up', 
+          'Wallet Top-up Failed (Bill: $billCode)',
+          status: 'failed',
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -112,6 +127,12 @@ class _WalletTopUpSheetState extends State<WalletTopUpSheet> {
         }
       } else {
         // Pending (status_id = 2)
+        await ProfileService.instance.addWalletTransaction(
+          amount, 
+          'top_up', 
+          'Wallet Top-up Pending (Bill: $billCode)',
+          status: 'pending',
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

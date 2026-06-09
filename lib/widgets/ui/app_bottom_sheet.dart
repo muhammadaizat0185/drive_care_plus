@@ -128,14 +128,23 @@ class AppBottomSheet {
         ),
       ),
       builder: (BuildContext sheetContext) {
+        final double keyboardHeight =
+            MediaQuery.of(sheetContext).viewInsets.bottom;
         final double viewportHeight =
             MediaQuery.of(sheetContext).size.height;
-        final double sheetHeight = viewportHeight * initialHeightFraction;
-        return SizedBox(
-          height: sheetHeight,
-          child: Padding(
-            padding: EdgeInsets.all(spacing.lg),
-            child: builder(sheetContext),
+        final double targetHeight = viewportHeight * initialHeightFraction;
+        final double maxAvailableHeight = viewportHeight - keyboardHeight;
+        final double sheetHeight =
+            targetHeight > maxAvailableHeight ? maxAvailableHeight : targetHeight;
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: keyboardHeight),
+          child: SizedBox(
+            height: sheetHeight,
+            child: Padding(
+              padding: EdgeInsets.all(spacing.lg),
+              child: builder(sheetContext),
+            ),
           ),
         );
       },

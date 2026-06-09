@@ -13,13 +13,16 @@ class BiometricService extends ChangeNotifier {
   final LocalAuthentication _localAuth = LocalAuthentication();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   bool _isBiometricsEnabled = false;
+  bool _isTransactionAuthEnabled = false;
 
   bool get isBiometricsEnabled => _isBiometricsEnabled;
+  bool get isTransactionAuthEnabled => _isTransactionAuthEnabled;
 
   Future<void> _init() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isBiometricsEnabled = prefs.getBool('biometrics_login_enabled') ?? false;
+      _isTransactionAuthEnabled = prefs.getBool('biometrics_transactions_enabled') ?? false;
       notifyListeners();
     } catch (e) {
       debugPrint('Error initializing BiometricService: $e');
@@ -39,10 +42,10 @@ class BiometricService extends ChangeNotifier {
   }
 
   /// Triggers the native biometric verification dialog.
-  Future<bool> authenticateLocal() async {
+  Future<bool> authenticateLocal({String reason = 'Verify your identity to log in securely.'}) async {
     try {
       return await _localAuth.authenticate(
-        localizedReason: 'Verify your identity to log in securely.',
+        localizedReason: reason,
         options: const AuthenticationOptions(
           biometricOnly: true,
           useErrorDialogs: true,
@@ -52,6 +55,18 @@ class BiometricService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Biometric authentication error: $e');
       return false;
+    }
+  }
+
+  Future<void> setTransactionAuthEnabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('biometrics_transactions_enabled', enabled);
+      _isTransactionAuthEnabled = enabled;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to set transaction biometrics state: $e');
+      rethrow;
     }
   }
 

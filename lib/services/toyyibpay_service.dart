@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'api_tracker_service.dart';
 
 class ToyyibPayService {
@@ -10,8 +11,22 @@ class ToyyibPayService {
   // ==========================================
   // TOYYIBPAY CONFIGURATION
   // ==========================================
-  static const String secretKey = 'zgwnuduz-sfse-uiuk-u58l-3nyvv4w7lu34';
-  static const String categoryCode = 'cxtpjaz1';
+  static String get secretKey {
+    try {
+      final value = FirebaseRemoteConfig.instance.getString('toyyibpay_secret_key');
+      if (value.isNotEmpty) return value;
+    } catch (_) {}
+    return 'zgwnuduz-sfse-uiuk-u58l-3nyvv4w7lu34'; // Fallback
+  }
+
+  static String get categoryCode {
+    try {
+      final value = FirebaseRemoteConfig.instance.getString('toyyibpay_category_code');
+      if (value.isNotEmpty) return value;
+    } catch (_) {}
+    return 'cxtpjaz1'; // Fallback
+  }
+
   static const String returnUrl = 'https://drivecareplus.com/payment-return';
 
   /// Creates a bill in ToyyibPay and returns the BillCode
@@ -111,6 +126,7 @@ class ToyyibPayService {
       'billPriceSetting': '0',
       'billPayorInfo': '1',
       'billAmount': priceInCents,
+      'billPrice': priceInCents,
       'billTo': payerName,
       'billEmail': payerEmail,
       'billPhone': formattedPhone,

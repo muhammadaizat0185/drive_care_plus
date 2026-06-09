@@ -9,9 +9,11 @@ import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/workshop_firebase_service.dart';
 import '../services/vehicle_insights.dart';
+import '../services/profile_service.dart';
 import '../services/notification_service.dart';
 import '../widgets/star_rating.dart';
 import '../widgets/rating_form_dialog.dart';
+import '../core/util/transaction_helper.dart';
 
 class WorkshopDetailScreen extends StatefulWidget {
   const WorkshopDetailScreen({super.key, required this.workshop});
@@ -41,6 +43,13 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   bool _isMajorService = false;
   bool _showBookingSetup = false;
   final Set<String> _selectedSpecificServices = {};
+  String _paymentMethod = 'at_workshop';
+
+  double _calculateBookingCost() {
+    final double basePrice = 150.0;
+    final double additionalFees = _selectedSpecificServices.length * 20.0;
+    return basePrice + additionalFees;
+  }
 
   final Map<String, List<String>> _repairServices = {
     'Basic Maintenance': [
@@ -483,6 +492,8 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Widget _buildBottomActionBar(Color primaryColor, bool isDark) {
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
@@ -690,7 +701,86 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Payment Method',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Pay at Workshop'),
+                    selected: _paymentMethod == 'at_workshop',
+                    onSelected: (val) {
+                      if (val) setState(() => _paymentMethod = 'at_workshop');
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Pay via Wallet'),
+                    selected: _paymentMethod == 'wallet',
+                    onSelected: (val) {
+                      if (val) setState(() => _paymentMethod = 'wallet');
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_paymentMethod == 'wallet') ...[
+              ListenableBuilder(
+                listenable: ProfileService.instance,
+                builder: (context, _) {
+                  final double balance = ProfileService.instance.walletBalance;
+                  final double cost = _calculateBookingCost();
+                  final bool hasSufficient = balance >= cost;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: hasSufficient 
+                            ? colors.success.withValues(alpha: colors.surfaceMedium)
+                            : colors.error.withValues(alpha: colors.surfaceMedium),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: hasSufficient ? colors.success : colors.error,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            hasSufficient ? Icons.check_circle_outline : Icons.error_outline,
+                            color: hasSufficient ? colors.success : colors.error,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              hasSufficient 
+                                  ? 'Sufficient Balance (RM ${balance.toStringAsFixed(2)})'
+                                  : 'Insufficient Balance (RM ${balance.toStringAsFixed(2)}). Need RM ${(cost - balance).toStringAsFixed(2)} more.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: hasSufficient ? colors.success : colors.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+            const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 12),
           ],
@@ -765,6 +855,48 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       return;
     }
 
+    final double totalCost = _calculateBookingCost();
+    String status = 'Pending';
+    bool walletPaid = false;
+
+    if (_paymentMethod == 'wallet') {
+      final double balance = ProfileService.instance.walletBalance;
+      if (balance < totalCost) {
+        _showMessage('Insufficient wallet balance. Please top up or pay at workshop.');
+        return;
+      }
+
+      final bool authorized = await TransactionHelper.confirmAndAuthorizeTransaction(
+        context: context,
+        amount: totalCost,
+        description: 'Booking: $_selectedServiceType',
+        recipient: _currentWorkshop.name,
+      );
+
+      if (authorized) {
+        await ProfileService.instance.addWalletTransaction(
+          -totalCost,
+          'payment',
+          'Workshop booking fee at ${_currentWorkshop.name}',
+          status: 'completed',
+        );
+        status = 'Paid';
+        walletPaid = true;
+
+        try {
+          await NotificationService.instance.showMoneyFlowNotification(
+            title: 'Booking Paid Successfully',
+            body: 'RM ${totalCost.toStringAsFixed(2)} debited for ${_currentWorkshop.name}.',
+          );
+        } catch (e) {
+          debugPrint('Error triggering wallet notification: $e');
+        }
+      } else {
+        status = 'Pending';
+        _showMessage('Payment cancelled. Booking scheduled as Pending.');
+      }
+    }
+
     final bookingData = {
       'userId': user.uid,
       'place_id': _currentWorkshop.id,
@@ -773,8 +905,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       'specificServices': _selectedSpecificServices.toList(),
       'date': _selectedDate!.toIso8601String(),
       'time': '${_selectedTime!.hour}:${_selectedTime!.minute}',
-      'totalCost': 150.0, // Dummy fixed cost
-      'status': 'Pending',
+      'totalCost': totalCost,
+      'status': status,
+      'paymentMethod': _paymentMethod,
     };
 
     try {
@@ -786,11 +919,12 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         'workshopId': _currentWorkshop.id,
         'workshopName': _currentWorkshop.name,
         'serviceName': _selectedServiceType,
-        'servicePrice': 150.0,
-        'totalCost': 150.0,
+        'servicePrice': totalCost,
+        'totalCost': totalCost,
         'date': '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
         'time': _selectedTime!.format(context),
-        'status': 'Pending',
+        'status': status,
+        'paymentMethod': _paymentMethod,
       };
       await VehicleInsights.instance.addBooking(localBookingData);
 
@@ -820,12 +954,18 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     }
     
     if (mounted) {
+      final String dialogMessage = _paymentMethod == 'wallet'
+          ? (walletPaid
+              ? 'Your appointment has been scheduled. Payment of RM ${totalCost.toStringAsFixed(2)} was successfully deducted from your wallet.'
+              : 'Your booking has been scheduled as unpaid. You can complete the payment in the "My Bookings" screen.')
+          : 'Your appointment has been scheduled and saved to our database.';
+
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('Booking Successful!', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text('Your appointment has been scheduled and saved to our database.'),
+          content: Text(dialogMessage),
           actions: [
             TextButton(
               onPressed: () {

@@ -10,7 +10,7 @@ import 'package:drive_care_plus/screens/document_vault/_widgets.dart';
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    ProfileService.instance.isPro = false;
+    await ProfileService.instance.clearProfile();
   });
 
   group('Pro Subscription & Gating Logic Tests', () {
@@ -49,6 +49,59 @@ void main() {
       
       const int carLimitForBasic = 2;
       expect(carLimitForBasic, 2);
+    });
+  });
+
+  group('ProfileService Wallet Logic', () {
+    test('completed transaction increments wallet balance and logs correctly', () async {
+      final profile = ProfileService.instance;
+      expect(profile.walletBalance, 0.0);
+
+      await profile.addWalletTransaction(50.0, 'top_up', 'Completed top-up', status: 'completed');
+
+      expect(profile.walletBalance, 50.0);
+      expect(profile.transactions.length, 1);
+      expect(profile.transactions.first['amount'], 50.0);
+      expect(profile.transactions.first['status'], 'completed');
+    });
+
+    test('failed transaction does not increment balance but is recorded', () async {
+      final profile = ProfileService.instance;
+      expect(profile.walletBalance, 0.0);
+
+      await profile.addWalletTransaction(100.0, 'top_up', 'Failed top-up', status: 'failed');
+
+      expect(profile.walletBalance, 0.0);
+      expect(profile.transactions.length, 1);
+      expect(profile.transactions.first['amount'], 100.0);
+      expect(profile.transactions.first['status'], 'failed');
+    });
+
+    test('pending transaction does not increment balance but is recorded', () async {
+      final profile = ProfileService.instance;
+      expect(profile.walletBalance, 0.0);
+
+      await profile.addWalletTransaction(200.0, 'top_up', 'Pending top-up', status: 'pending');
+
+      expect(profile.walletBalance, 0.0);
+      expect(profile.transactions.length, 1);
+      expect(profile.transactions.first['amount'], 200.0);
+      expect(profile.transactions.first['status'], 'pending');
+    });
+
+    test('completed deduction decrements wallet balance and logs correctly', () async {
+      final profile = ProfileService.instance;
+      // Seed balance
+      await profile.addWalletTransaction(50.0, 'top_up', 'Completed top-up');
+      expect(profile.walletBalance, 50.0);
+
+      // Perform deduction
+      await profile.addWalletTransaction(-19.90, 'payment', 'Subscription fee');
+
+      expect(profile.walletBalance, 30.10);
+      expect(profile.transactions.length, 2);
+      expect(profile.transactions.first['amount'], -19.90);
+      expect(profile.transactions.first['status'], 'completed');
     });
   });
 }

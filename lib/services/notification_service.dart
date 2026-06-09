@@ -300,6 +300,29 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
+  /// Shows a money flow (top-up, payment, subscription) OS notification and adds an inbox entry.
+  Future<void> showMoneyFlowNotification({
+    required String title,
+    required String body,
+  }) async {
+    await _addToInbox(InboxNotification(
+      id: 'money_${DateTime.now().millisecondsSinceEpoch}',
+      type: 'payment',
+      title: title,
+      body: body,
+      timestamp: DateTime.now(),
+    ));
+
+    await _dispatch(
+      id: _notificationId(title + body),
+      title: title,
+      body: body,
+      channelId: _channelBookings,
+      channelName: 'Wallet Transactions',
+      payload: 'wallet',
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Journey review notifications (Phase 3)
   // -------------------------------------------------------------------------

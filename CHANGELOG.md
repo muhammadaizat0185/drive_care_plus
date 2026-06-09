@@ -4,6 +4,28 @@ All notable changes made to the DriveCare+ codebase during this development cycl
 
 ---
 
+## [1.4.0] - 2026-06-09
+
+### Added
+*   **Secure Biometric Payments**:
+    *   Added `isTransactionAuthEnabled` configuration settings in `BiometricService` to secure wallet transaction events.
+    *   Created dynamic confirmation sheet `TransactionHelper.confirmAndAuthorizeTransaction` displaying money transfer details (recipient, cost, descriptions) before debit authorization.
+    *   Added a toggle switch switch tile inside the settings page under PRIVACY & SECURITY to customize biometric checkout properties.
+*   **Booking Payment Retry & Method Switching**:
+    *   Configured the unpaid sheet details fallback: when booking wallet checkout is aborted or biometric validation is skipped, appointments are successfully registered as Pending (unpaid state) with paymentMethod set to `wallet`.
+    *   Added visual warning banners and actionable triggers in the My Bookings details sheet to retry unpaid wallet transactions or switch payment methods between `wallet` and `at_workshop`.
+*   **Transaction Local Notifications**:
+    *   Added `showMoneyFlowNotification` in `NotificationService` issuing OS alerts on completed top-ups, paid booking debits, or Pro upgrades.
+
+### Changed
+*   **Global Bottom Sheet Keyboard Avoidance**:
+    *   Configured `AppBottomSheet.show` to dynamically retrieve keyboard height (`MediaQuery.of(context).viewInsets.bottom`) and apply equivalent bottom padding offset.
+    *   Dynamically capped bottom-sheet constraints to remaining visible screen space (`viewportHeight - keyboardHeight`) to prevent rendering bounds issues.
+*   **Scrollable Bottom Sheet Forms**:
+    *   Wrapped Settings password forms (Change password and Biometric confirmation) in `SingleChildScrollView` to prevent layout overflow errors when the keyboard is displayed.
+
+---
+
 ## [1.3.0] - 2026-06-09
 
 ### Added

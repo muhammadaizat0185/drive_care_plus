@@ -62,6 +62,7 @@ void main() {
 
     // Re-initialize singleton state
     await BiometricService.instance.clearStoredCredentials();
+    await BiometricService.instance.setTransactionAuthEnabled(false);
   });
 
   tearDown(() {
@@ -79,6 +80,20 @@ void main() {
     test('authenticateLocal returns true when verification succeeds', () async {
       final bool result = await BiometricService.instance.authenticateLocal();
       expect(result, isTrue);
+    });
+
+    test('transaction biometric settings default to false, can be toggled', () async {
+      expect(BiometricService.instance.isTransactionAuthEnabled, isFalse);
+
+      await BiometricService.instance.setTransactionAuthEnabled(true);
+      expect(BiometricService.instance.isTransactionAuthEnabled, isTrue);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('biometrics_transactions_enabled'), isTrue);
+
+      await BiometricService.instance.setTransactionAuthEnabled(false);
+      expect(BiometricService.instance.isTransactionAuthEnabled, isFalse);
+      expect(prefs.getBool('biometrics_transactions_enabled'), isFalse);
     });
 
     test('setBiometricsEnabled saves credentials securely and toggles local state', () async {
