@@ -23,6 +23,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/activity_recognition_service.dart';
 import '../services/toyyibpay_service.dart';
 import 'toyyibpay_webview_screen.dart';
+import '../core/util/transaction_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -397,6 +398,15 @@ class ProSubscriptionSheetState extends State<ProSubscriptionSheet> {
   bool _isProcessing = false;
 
   Future<void> _startSubscriptionPayment() async {
+    final bool authorized = await TransactionHelper.confirmAndAuthorizeTransaction(
+      context: context,
+      amount: 19.90,
+      description: 'Monthly Pro Subscription',
+      recipient: 'DriveCare+ Premium',
+    );
+
+    if (!authorized) return;
+
     setState(() => _isProcessing = true);
 
     final user = FirebaseAuth.instance.currentUser;
@@ -436,6 +446,14 @@ class ProSubscriptionSheetState extends State<ProSubscriptionSheet> {
 
       if (result == true) {
         await ProfileService.instance.initializeProSubscription();
+        try {
+          await NotificationService.instance.showMoneyFlowNotification(
+            title: 'Pro Subscription Upgraded',
+            body: 'Pro Subscription is active! RM 19.90 debited.',
+          );
+        } catch (e) {
+          debugPrint('Error sending sub notification: $e');
+        }
         if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -443,6 +461,72 @@ class ProSubscriptionSheetState extends State<ProSubscriptionSheet> {
           );
         }
       }
+    }
+  }
+
+  Future<void> _payWithWallet(BuildContext context, double currentBalance) async {
+    if (currentBalance < 19.90) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Insufficient wallet balance. Please top up first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final bool authorized = await TransactionHelper.confirmAndAuthorizeTransaction(
+      context: context,
+      amount: 19.90,
+      description: 'Monthly Pro Subscription Upgrade',
+      recipient: 'DriveCare+ Premium',
+    );
+
+    if (!authorized) return;
+
+    setState(() => _isProcessing = true);
+
+    try {
+      // 1. Deduct RM 19.90 from the wallet balance
+      await ProfileService.instance.addWalletTransaction(
+        -19.90,
+        'payment',
+        'Paid for Pro Subscription via Wallet',
+        status: 'completed',
+      );
+
+      // 2. Initialize the Pro Subscription
+      await ProfileService.instance.initializeProSubscription();
+
+      try {
+        await NotificationService.instance.showMoneyFlowNotification(
+          title: 'Pro Subscription Upgraded',
+          body: 'Pro Subscription is active! RM 19.90 debited.',
+        );
+      } catch (e) {
+        debugPrint('Error sending sub notification: $e');
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Welcome to Pro! Subscription active. ✨'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to process wallet payment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -578,21 +662,61 @@ class ProSubscriptionSheetState extends State<ProSubscriptionSheet> {
               ),
             ),
           ] else ...[
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00B894),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
-                ),
-                onPressed: _isProcessing ? null : _startSubscriptionPayment,
-                child: _isProcessing
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Subscribe & Unlock Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
+            ListenableBuilder(
+              listenable: ProfileService.instance,
+              builder: (context, _) {
+                final double currentBalance = ProfileService.instance.walletBalance;
+                return Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00B894),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 0,
+                        ),
+                        onPressed: _isProcessing ? null : _startSubscriptionPayment,
+                        child: _isProcessing
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text('Pay via ToyyibPay FPX', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF00B894),
+                          side: const BorderSide(color: Color(0xFF00B894), width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: _isProcessing
+                            ? null
+                            : () => _payWithWallet(context, currentBalance),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.account_balance_wallet, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Pay with Wallet (Balance: RM ${currentBalance.toStringAsFixed(2)})',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
           const SizedBox(height: 16),

@@ -114,12 +114,15 @@ class ProfileService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addWalletTransaction(double amount, String type, String description) async {
-    _walletBalance += amount;
+  Future<void> addWalletTransaction(double amount, String type, String description, {String status = 'completed'}) async {
+    if (status == 'completed') {
+      _walletBalance += amount;
+    }
     final transaction = {
       'amount': amount,
       'type': type, // 'top_up', 'deduction', 'subscription'
       'description': description,
+      'status': status,
       'date': DateTime.now().toIso8601String(),
     };
     _transactions.insert(0, transaction);

@@ -673,44 +673,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             }
 
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text(
-                  'Change Password',
-                  style: typography.title.copyWith(color: colors.foreground),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: spacing.md),
-                AppTextField(
-                  controller: passwordController,
-                  label: 'New Password',
-                  obscureText: true,
-                  errorText: passwordError,
-                  enabled: !isSaving,
-                ),
-                SizedBox(height: spacing.md),
-                AppTextField(
-                  controller: confirmController,
-                  label: 'Confirm New Password',
-                  obscureText: true,
-                  errorText: confirmError,
-                  enabled: !isSaving,
-                ),
-                SizedBox(height: spacing.lg),
-                AppGradientButton(
-                  label: 'Update Password',
-                  isLoading: isSaving,
-                  onPressed: isSaving ? null : submit,
-                ),
-                SizedBox(height: spacing.md),
-                AppSecondaryButton(
-                  label: 'Cancel',
-                  fullWidth: true,
-                  onPressed: isSaving ? null : () => Navigator.of(sheetContext).pop(),
-                ),
-              ],
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    'Change Password',
+                    style: typography.title.copyWith(color: colors.foreground),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: spacing.md),
+                  AppTextField(
+                    controller: passwordController,
+                    label: 'New Password',
+                    obscureText: true,
+                    errorText: passwordError,
+                    enabled: !isSaving,
+                  ),
+                  SizedBox(height: spacing.md),
+                  AppTextField(
+                    controller: confirmController,
+                    label: 'Confirm New Password',
+                    obscureText: true,
+                    errorText: confirmError,
+                    enabled: !isSaving,
+                  ),
+                  SizedBox(height: spacing.lg),
+                  AppGradientButton(
+                    label: 'Update Password',
+                    isLoading: isSaving,
+                    onPressed: isSaving ? null : submit,
+                  ),
+                  SizedBox(height: spacing.md),
+                  AppSecondaryButton(
+                    label: 'Cancel',
+                    fullWidth: true,
+                    onPressed: isSaving ? null : () => Navigator.of(sheetContext).pop(),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -875,6 +877,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _handleTwoFactorAuth();
     } else if (label == 'Toggle Biometric') {
       _handleToggleBiometric();
+    } else if (label == 'Toggle Biometric Transaction') {
+      _handleToggleBiometricTransaction();
     } else {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -1022,47 +1026,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               }
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text(
-                    'Confirm Password',
-                    style: typography.title.copyWith(color: colors.foreground),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: spacing.sm),
-                  Text(
-                    'Please enter your password to encrypt and secure your biometric credentials on this device.',
-                    style: typography.body.copyWith(color: colors.foreground.withValues(alpha: 0.7)),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: spacing.md),
-                  AppTextField(
-                    controller: passwordController,
-                    label: 'Password',
-                    obscureText: true,
-                    errorText: passwordError,
-                    enabled: !isSaving,
-                  ),
-                  SizedBox(height: spacing.lg),
-                  AppGradientButton(
-                    label: 'Enable Biometrics',
-                    isLoading: isSaving,
-                    onPressed: isSaving ? null : submit,
-                  ),
-                  SizedBox(height: spacing.md),
-                  AppSecondaryButton(
-                    label: 'Cancel',
-                    fullWidth: true,
-                    onPressed: isSaving ? null : () => Navigator.of(sheetContext).pop(),
-                  ),
-                ],
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text(
+                      'Confirm Password',
+                      style: typography.title.copyWith(color: colors.foreground),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: spacing.sm),
+                    Text(
+                      'Please enter your password to encrypt and secure your biometric credentials on this device.',
+                      style: typography.body.copyWith(color: colors.foreground.withValues(alpha: 0.7)),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: spacing.md),
+                    AppTextField(
+                      controller: passwordController,
+                      label: 'Password',
+                      obscureText: true,
+                      errorText: passwordError,
+                      enabled: !isSaving,
+                    ),
+                    SizedBox(height: spacing.lg),
+                    AppGradientButton(
+                      label: 'Enable Biometrics',
+                      isLoading: isSaving,
+                      onPressed: isSaving ? null : submit,
+                    ),
+                    SizedBox(height: spacing.md),
+                    AppSecondaryButton(
+                      label: 'Cancel',
+                      fullWidth: true,
+                      onPressed: isSaving ? null : () => Navigator.of(sheetContext).pop(),
+                    ),
+                  ],
+                ),
               );
             },
           );
         },
       );
+    }
+  }
+
+  Future<void> _handleToggleBiometricTransaction() async {
+    final bool isCurrentlyEnabled = BiometricService.instance.isTransactionAuthEnabled;
+    if (isCurrentlyEnabled) {
+      await BiometricService.instance.setTransactionAuthEnabled(false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Biometric payments disabled.')),
+        );
+      }
+    } else {
+      final bool canAuth = await BiometricService.instance.canAuthenticate();
+      if (!canAuth) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometrics not supported or enrolled on this device. Please set up biometrics in system settings first.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      await BiometricService.instance.setTransactionAuthEnabled(true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Biometric payments enabled successfully! 💰'), backgroundColor: Colors.green),
+        );
+      }
     }
   }
 
@@ -1511,6 +1548,7 @@ class _PrivacySecuritySection extends StatelessWidget {
 
     final bool isTotpEnabled = ProfileService.instance.isTotpEnabled;
     final bool isBiometricEnabled = BiometricService.instance.isBiometricsEnabled;
+    final bool isTransactionAuthEnabled = BiometricService.instance.isTransactionAuthEnabled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1536,6 +1574,16 @@ class _PrivacySecuritySection extends StatelessWidget {
             value: isBiometricEnabled,
             semanticsLabel: 'Biometric login',
             onChanged: (bool v) => onAction('Toggle Biometric'),
+          ),
+        ),
+        AppListTile(
+          leading: Icon(Icons.payment_rounded, color: iconColor),
+          title: Text('Biometric payments', style: titleStyle),
+          subtitle: Text('Verify wallet transactions with biometrics', style: subtitleStyle),
+          trailing: AppToggleSwitch(
+            value: isTransactionAuthEnabled,
+            semanticsLabel: 'Biometric payments',
+            onChanged: (bool v) => onAction('Toggle Biometric Transaction'),
           ),
         ),
       ],

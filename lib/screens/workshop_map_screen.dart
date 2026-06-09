@@ -337,6 +337,7 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
               'status': updates['status'] ?? booking['status'],
               'date': updates['date'] ?? booking['date'],
               'time': updates['time'] ?? booking['time'],
+              if (updates.containsKey('paymentMethod')) 'paymentMethod': updates['paymentMethod'],
             };
             await _service.updateBooking(bookingId, firestoreUpdates);
 
@@ -346,6 +347,7 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
               'status': updates['status'] ?? booking['status'],
               'date': updates['localDate'] ?? _formatIsoDate(updates['date'] ?? booking['date'] ?? ''),
               'time': updates['localTime'] ?? (updates['time'] ?? booking['time'] ?? ''),
+              if (updates.containsKey('paymentMethod')) 'paymentMethod': updates['paymentMethod'],
             };
             await VehicleInsights.instance.updateBooking(bookingId, localUpdates);
 

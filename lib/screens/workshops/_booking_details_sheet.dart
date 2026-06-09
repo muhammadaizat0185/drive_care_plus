@@ -3,6 +3,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/tokens/tokens.dart';
 import '../../widgets/ui/ui.dart';
+import '../../services/profile_service.dart';
+import '../../services/notification_service.dart';
+import '../../core/util/transaction_helper.dart';
 
 enum BookingSheetMode { details, edit }
 
@@ -182,6 +185,67 @@ class _BookingDetailsBottomSheetState extends State<BookingDetailsBottomSheet> {
     return bookingDate.isBefore(todayDate);
   }
 
+  Future<void> _payPendingBookingWithWallet(double totalCost, String workshopName) async {
+    final double balance = ProfileService.instance.walletBalance;
+    if (balance < totalCost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Insufficient wallet balance. Please top up first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final bool authorized = await TransactionHelper.confirmAndAuthorizeTransaction(
+      context: context,
+      amount: totalCost,
+      description: 'Payment for scheduled workshop booking',
+      recipient: workshopName,
+    );
+
+    if (!authorized) return;
+
+    try {
+      await ProfileService.instance.addWalletTransaction(
+        -totalCost,
+        'payment',
+        'Workshop booking fee at $workshopName',
+        status: 'completed',
+      );
+
+      try {
+        await NotificationService.instance.showMoneyFlowNotification(
+          title: 'Booking Paid Successfully',
+          body: 'RM ${totalCost.toStringAsFixed(2)} debited for $workshopName.',
+        );
+      } catch (e) {
+        debugPrint('Error triggering wallet notification: $e');
+      }
+
+      widget.onSave({
+        'status': 'Paid',
+        'paymentMethod': 'wallet',
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to process wallet payment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _changePaymentToAtWorkshop() {
+    widget.onSave({
+      'status': 'Pending',
+      'paymentMethod': 'at_workshop',
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -197,6 +261,8 @@ class _BookingDetailsBottomSheetState extends State<BookingDetailsBottomSheet> {
     final String timeString = widget.booking['time']?.toString() ?? '';
     final String status = widget.booking['status']?.toString() ?? 'Pending';
     final List<dynamic> specificServices = widget.booking['specificServices'] as List<dynamic>? ?? const [];
+    final String paymentMethod = widget.booking['paymentMethod']?.toString() ?? 'at_workshop';
+    final double totalCost = (widget.booking['totalCost'] as num?)?.toDouble() ?? 150.0;
 
     final bool isPast = _isPastBooking();
     final bool isPendingOrConfirmed = status.toLowerCase() == 'pending' || status.toLowerCase() == 'confirmed';
@@ -476,6 +542,96 @@ class _BookingDetailsBottomSheetState extends State<BookingDetailsBottomSheet> {
               ),
             ),
             SizedBox(height: spacing.lg),
+          ],
+
+          // Payment Gating / Unpaid state handlers
+          if (status.toLowerCase() == 'pending') ...[
+            Container(
+              margin: EdgeInsets.only(bottom: spacing.lg),
+              padding: EdgeInsets.all(spacing.md),
+              decoration: BoxDecoration(
+                color: colors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(radii.medium),
+                border: Border.all(color: colors.warning.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        paymentMethod == 'wallet' ? Icons.account_balance_wallet_outlined : Icons.storefront_outlined,
+                        color: colors.warning,
+                      ),
+                      SizedBox(width: spacing.sm),
+                      Expanded(
+                        child: Text(
+                          paymentMethod == 'wallet' 
+                              ? 'Payment Pending (Wallet)' 
+                              : 'Unpaid (Pay at Workshop)',
+                          style: typography.bodyLarge.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colors.warning,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: spacing.sm),
+                  Text(
+                    paymentMethod == 'wallet'
+                        ? 'This booking is unpaid. You can pay now using your DriveCare+ wallet balance, or switch your payment method to pay at the workshop.'
+                        : 'You can choose to pay immediately using your DriveCare+ wallet balance instead of paying at the workshop.',
+                    style: typography.body.copyWith(color: colors.foreground),
+                  ),
+                  SizedBox(height: spacing.md),
+                  if (paymentMethod == 'wallet') ...[
+                    AppGradientButton(
+                      label: 'Pay via Wallet (RM ${totalCost.toStringAsFixed(2)})',
+                      icon: Icons.payment_rounded,
+                      onPressed: () => _payPendingBookingWithWallet(totalCost, workshopName),
+                    ),
+                    SizedBox(height: spacing.sm),
+                    AppSecondaryButton(
+                      label: 'Pay at Workshop',
+                      fullWidth: true,
+                      onPressed: () => _changePaymentToAtWorkshop(),
+                    ),
+                  ] else ...[
+                    AppGradientButton(
+                      label: 'Pay via Wallet (RM ${totalCost.toStringAsFixed(2)})',
+                      icon: Icons.account_balance_wallet_outlined,
+                      onPressed: () => _payPendingBookingWithWallet(totalCost, workshopName),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ] else if (status.toLowerCase() == 'paid') ...[
+            Container(
+              margin: EdgeInsets.only(bottom: spacing.lg),
+              padding: EdgeInsets.all(spacing.md),
+              decoration: BoxDecoration(
+                color: colors.success.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(radii.medium),
+                border: Border.all(color: colors.success.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: colors.success),
+                  SizedBox(width: spacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Paid via Wallet (RM ${totalCost.toStringAsFixed(2)})',
+                      style: typography.bodyLarge.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colors.success,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
 
           // Buttons: Navigate + Edit

@@ -148,4 +148,69 @@ void main() {
       throwsA(isA<AssertionError>()),
     );
   });
+
+  testWidgets('sheet shifts up and caps height when viewInsets.bottom (keyboard) is present', (tester) async {
+    const Key bodyKey = Key('sheet-body');
+    const double fraction = 0.8; // Target height = 800 * 0.8 = 640
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.buildTheme(AppColors.emerald500, Brightness.light),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            size: const Size(400, 800),
+            viewInsets: const EdgeInsets.only(bottom: 300), // 300px keyboard
+          ),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => AppBottomSheet.show<void>(
+                context,
+                initialHeightFraction: fraction,
+                builder: (_) => const SizedBox(
+                  key: bodyKey,
+                  height: 100,
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(bodyKey), findsOneWidget);
+
+    // Screen height = 800.
+    // Target height = 800 * 0.8 = 640.
+    // Keyboard = 300.
+    // Max available height = 800 - 300 = 500.
+    // Target height (640) > max available (500) -> height must be capped at 500.
+    
+    // Find the SizedBox that wraps our builder in AppBottomSheet.
+    // We expect its height to be capped at 500 (or less if top safe area applies).
+    final SizedBox wrapper = tester.widget<SizedBox>(
+      find.ancestor(
+        of: find.byKey(bodyKey),
+        matching: find.byType(SizedBox),
+      ).first,
+    );
+    final BuildContext elementContext = tester.element(find.byKey(bodyKey));
+    final double expectedHeight = 800 - 300 - MediaQuery.of(elementContext).padding.top;
+    expect(wrapper.height, expectedHeight);
+
+    // Verify the bottom padding matches the keyboard height of 300.
+    final Padding paddingWidget = tester.widget<Padding>(
+      find.ancestor(
+        of: find.byWidget(wrapper),
+        matching: find.byType(Padding),
+      ).first,
+    );
+    expect(paddingWidget.padding, const EdgeInsets.only(bottom: 300));
+  });
 }
