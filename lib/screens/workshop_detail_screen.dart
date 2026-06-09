@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/color_utils.dart';
+import '../core/theme/tokens/tokens.dart';
 import '../models/workshop.dart';
 import '../services/google_maps_service.dart';
 import '../services/workshop_firebase_service.dart';
@@ -143,8 +144,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryColor = theme.colorScheme.primary;
 
     return AppBackground(
       child: Scaffold(
@@ -156,7 +160,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           ),
           title: Text(
             _currentWorkshop.name.isEmpty ? 'Workshop Details' : _currentWorkshop.name,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            style: typography.headline.copyWith(color: colors.foreground),
           ),
           actions: [
             IconButton(

@@ -47,7 +47,12 @@ class MaintenanceScreen extends StatelessWidget {
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Maintenance')),
+        appBar: AppBar(
+          title: Text(
+            'Maintenance',
+            style: typography.headline.copyWith(color: colors.foreground),
+          ),
+        ),
       body: ListenableBuilder(
         listenable: VehicleInsights.instance,
         builder: (context, child) {

@@ -225,7 +225,12 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Trip Tracking')),
+        appBar: AppBar(
+          title: Text(
+            'Trip Tracking',
+            style: typography.headline.copyWith(color: colors.foreground),
+          ),
+        ),
       body: ListView(
         padding: EdgeInsets.all(spacing.lg),
         children: [

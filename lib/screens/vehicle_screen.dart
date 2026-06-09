@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme/color_utils.dart';
+import '../core/theme/tokens/tokens.dart';
 import '../services/bluetooth_vehicle_service.dart';
 import '../services/car_database.dart';
 import '../services/profile_service.dart';
@@ -183,13 +184,21 @@ class VehicleScreen extends StatefulWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final ThemeData theme = Theme.of(context);
+    final AppColorsExt colors = theme.extension<AppColorsExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryColor = theme.colorScheme.primary;
 
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Vehicle Profile', style: TextStyle(fontWeight: FontWeight.bold))),
+        appBar: AppBar(
+          title: Text(
+            'Vehicle Profile',
+            style: typography.headline.copyWith(color: colors.foreground),
+          ),
+        ),
         body: ListenableBuilder(
           listenable: VehicleInsights.instance,
           builder: (context, child) {

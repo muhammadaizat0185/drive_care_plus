@@ -287,7 +287,10 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
         backgroundColor: Colors.transparent,
         extendBodyBehindAppBar: true,
         appBar: AppBar(
-          title: const Text('Journey Log'),
+          title: Text(
+            'Journey Log',
+            style: typography.headline.copyWith(color: colors.foreground),
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: const BackButton(),
@@ -311,6 +314,26 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
                 mapToolbarEnabled: false,
                 compassEnabled: false,
                 polylines: allPolylines,
+              ),
+            ),
+
+            // ── Top gradient overlay for AppBar readability ──────────────
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: MediaQuery.of(context).padding.top + kToolbarHeight + spacing.md,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      colors.background.withValues(alpha: 0.75),
+                      colors.background.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
               ),
             ),
 

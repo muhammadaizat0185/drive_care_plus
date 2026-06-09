@@ -14,6 +14,8 @@ import '../services/vehicle_insights.dart';
 import '../services/notification_service.dart';
 import 'workshops/_browse_tab.dart';
 import 'workshops/_my_bookings_tab.dart';
+import 'workshops/_booking_details_sheet.dart';
+import 'workshops/_booking_history_tab.dart';
 import 'workshops/_workshop_detail_sheet.dart';
 import 'workshops/_edit_booking_sheet.dart';
 
@@ -65,7 +67,7 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _bootstrap();
   }
 
@@ -316,58 +318,64 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
     _tabController.animateTo(0);
   }
 
-  void _onBookingTap(Map<String, dynamic> booking) {
+  void _onBookingTap(Map<String, dynamic> booking, {BookingSheetMode initialMode = BookingSheetMode.details}) {
     final String bookingId = booking['id']?.toString() ?? '';
     if (bookingId.isEmpty) return;
 
     AppBottomSheet.show<void>(
       context,
       initialHeightFraction: 0.65,
-      builder: (BuildContext sheetCtx) => EditBookingBottomSheet(
+      builder: (BuildContext sheetCtx) => BookingDetailsBottomSheet(
         booking: booking,
+        initialMode: initialMode,
         onSave: (Map<String, dynamic> updates) async {
           Navigator.of(sheetCtx).pop(); // Close the sheet
           try {
             // Firestore updates
             final Map<String, dynamic> firestoreUpdates = <String, dynamic>{
-              'serviceName': updates['serviceName'],
-              'status': updates['status'],
-              'date': updates['date'],
-              'time': updates['time'],
+              'serviceName': updates['serviceName'] ?? booking['serviceName'],
+              'status': updates['status'] ?? booking['status'],
+              'date': updates['date'] ?? booking['date'],
+              'time': updates['time'] ?? booking['time'],
             };
             await _service.updateBooking(bookingId, firestoreUpdates);
 
             // SharedPreferences local updates
             final Map<String, dynamic> localUpdates = <String, dynamic>{
-              'serviceName': updates['serviceName'],
-              'status': updates['status'],
-              'date': updates['localDate'],
-              'time': updates['localTime'],
+              'serviceName': updates['serviceName'] ?? booking['serviceName'],
+              'status': updates['status'] ?? booking['status'],
+              'date': updates['localDate'] ?? _formatIsoDate(updates['date'] ?? booking['date'] ?? ''),
+              'time': updates['localTime'] ?? (updates['time'] ?? booking['time'] ?? ''),
             };
             await VehicleInsights.instance.updateBooking(bookingId, localUpdates);
 
             // Reschedule notification reminders
-            if (updates['status'] == 'Cancelled') {
+            final String finalStatus = updates['status'] ?? booking['status'] ?? 'Pending';
+            if (finalStatus == 'Cancelled') {
               await NotificationService.instance.cancelBookingReminders(bookingId);
             } else {
               try {
-                final parsedDate = DateTime.parse(updates['date'] as String);
-                final timeParts = (updates['time'] as String).split(':');
-                final hour = int.parse(timeParts[0]);
-                final minute = int.parse(timeParts[1]);
-                final bookingDateTime = DateTime(
-                  parsedDate.year,
-                  parsedDate.month,
-                  parsedDate.day,
-                  hour,
-                  minute,
-                );
-                await NotificationService.instance.scheduleBookingReminders(
-                  bookingId: bookingId,
-                  workshopName: booking['workshopName']?.toString() ?? 'Workshop',
-                  serviceName: updates['serviceName']?.toString() ?? 'General Service',
-                  bookingDateTime: bookingDateTime,
-                );
+                final String? dateVal = updates['date'] ?? booking['date'];
+                final String? timeVal = updates['time'] ?? booking['time'];
+                if (dateVal != null && timeVal != null) {
+                  final parsedDate = DateTime.parse(dateVal);
+                  final timeParts = timeVal.split(':');
+                  final hour = int.parse(timeParts[0]);
+                  final minute = int.parse(timeParts[1]);
+                  final bookingDateTime = DateTime(
+                    parsedDate.year,
+                    parsedDate.month,
+                    parsedDate.day,
+                    hour,
+                    minute,
+                  );
+                  await NotificationService.instance.scheduleBookingReminders(
+                    bookingId: bookingId,
+                    workshopName: booking['workshopName']?.toString() ?? 'Workshop',
+                    serviceName: updates['serviceName']?.toString() ?? booking['serviceName']?.toString() ?? 'General Service',
+                    bookingDateTime: bookingDateTime,
+                  );
+                }
               } catch (e) {
                 debugPrint('Error updating booking reminders: $e');
               }
@@ -390,6 +398,50 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
     );
   }
 
+  String _formatIsoDate(String iso) {
+    final DateTime? parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    return '${parsed.day}/${parsed.month}/${parsed.year}';
+  }
+
+  Future<void> _onConfirmFinished(String bookingId) async {
+    try {
+      await _service.updateBooking(bookingId, {'status': 'Finished'});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking marked as Finished')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update booking: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _onConfirmCancelled(String bookingId) async {
+    try {
+      await _service.cancelBooking(bookingId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking cancelled successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to cancel booking: $e')),
+        );
+      }
+    }
+  }
+
+  void _onRescheduleFromHistory(Map<String, dynamic> booking) {
+    _onBookingTap(booking, initialMode: BookingSheetMode.edit);
+  }
+
   // ---- Build ----------------------------------------------------------
 
   @override
@@ -403,7 +455,7 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
       child: Scaffold(
         backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Workshops'),
+        title: Text('Workshops', style: typography.headline.copyWith(color: colors.foreground)),
         bottom: PreferredSize(
           preferredSize: Size.fromHeight(48 + spacing.sm),
           child: Padding(
@@ -421,6 +473,7 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
               tabs: const <Widget>[
                 Tab(text: 'Browse'),
                 Tab(text: 'My Bookings'),
+                Tab(text: 'Booking History'),
               ],
             ),
           ),
@@ -447,6 +500,13 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
                   onBrowse: _onBrowseFromEmpty,
                   onTap: _onBookingTap,
                 ),
+                _BookingHistoryBranch(
+                  service: _service,
+                  onConfirmFinished: _onConfirmFinished,
+                  onConfirmCancelled: _onConfirmCancelled,
+                  onReschedule: _onRescheduleFromHistory,
+                  onTap: _onBookingTap,
+                ),
               ],
             ),
     ),);
@@ -456,6 +516,18 @@ class _WorkshopMapScreenState extends State<WorkshopMapScreen>
 /// Streams the user's bookings and renders the [MyBookingsTab] with the
 /// current snapshot. Extracted as a `StatelessWidget` so the streaming
 /// logic does not bloat `_WorkshopMapScreenState`.
+bool _isPastBooking(Map<String, dynamic> booking) {
+  final dateStr = booking['date']?.toString() ?? '';
+  if (dateStr.isEmpty) return false;
+  final parsedDate = DateTime.tryParse(dateStr);
+  if (parsedDate == null) return false;
+
+  final today = DateTime.now();
+  final bookingDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
+  final todayDate = DateTime(today.year, today.month, today.day);
+  return bookingDate.isBefore(todayDate);
+}
+
 class _MyBookingsBranch extends StatelessWidget {
   const _MyBookingsBranch({
     required this.service,
@@ -492,11 +564,72 @@ class _MyBookingsBranch extends StatelessWidget {
         }
         final List<Map<String, dynamic>> bookings =
             snapshot.data ?? const <Map<String, dynamic>>[];
+
+        final List<Map<String, dynamic>> upcomingBookings = bookings.where((booking) {
+          final String status = (booking['status'] ?? 'Pending').toString().toLowerCase();
+          final bool isPast = _isPastBooking(booking);
+          return status != 'cancelled' && status != 'finished' && !isPast;
+        }).toList();
+
         return MyBookingsTab(
-          bookings: bookings,
+          bookings: upcomingBookings,
           onReschedule: onReschedule,
           onCancel: onCancel,
           onBrowse: onBrowse,
+          onTap: onTap,
+        );
+      },
+    );
+  }
+}
+
+class _BookingHistoryBranch extends StatelessWidget {
+  const _BookingHistoryBranch({
+    required this.service,
+    required this.onConfirmFinished,
+    required this.onConfirmCancelled,
+    required this.onReschedule,
+    required this.onTap,
+  });
+
+  final WorkshopFirebaseService service;
+  final void Function(String) onConfirmFinished;
+  final void Function(String) onConfirmCancelled;
+  final void Function(Map<String, dynamic>) onReschedule;
+  final void Function(Map<String, dynamic>) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return BookingHistoryTab(
+        bookings: const <Map<String, dynamic>>[],
+        onTap: onTap,
+      );
+    }
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: service.watchUserBookings(user.uid),
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<List<Map<String, dynamic>>> snapshot,
+      ) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: AppSpinner());
+        }
+        final List<Map<String, dynamic>> bookings =
+            snapshot.data ?? const <Map<String, dynamic>>[];
+
+        final List<Map<String, dynamic>> pastBookings = bookings.where((booking) {
+          final String status = (booking['status'] ?? 'Pending').toString().toLowerCase();
+          final bool isPast = _isPastBooking(booking);
+          return status == 'cancelled' || status == 'finished' || isPast;
+        }).toList();
+
+        return BookingHistoryTab(
+          bookings: pastBookings,
+          onConfirmFinished: onConfirmFinished,
+          onConfirmCancelled: onConfirmCancelled,
+          onReschedule: onReschedule,
           onTap: onTap,
         );
       },

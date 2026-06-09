@@ -186,6 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
     return AppBackground(
       child: ListenableBuilder(
@@ -212,9 +213,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-              title: const Text(
+              title: Text(
                 'Settings',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: typography.headline.copyWith(color: colors.foreground),
               ),
               actions: <Widget>[
                 if (_saveGate.isRunning)

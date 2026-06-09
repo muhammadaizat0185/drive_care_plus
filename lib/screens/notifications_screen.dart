@@ -40,6 +40,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final ThemeData theme = Theme.of(context);
     final AppColorsExt colors = theme.extension<AppColorsExt>()!;
     final AppSpacingExt spacing = theme.extension<AppSpacingExt>()!;
+    final AppTypographyExt typography = theme.extension<AppTypographyExt>()!;
 
     return AppBackground(
       child: ListenableBuilder(
@@ -62,9 +63,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           return Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-              title: const Text(
+              title: Text(
                 'Notifications',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: typography.headline.copyWith(color: colors.foreground),
               ),
               actions: [
                 if (inbox.isNotEmpty)
