@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/workshop.dart';
+import '../services/audio_service.dart';
 
 class RatingFormDialog extends StatefulWidget {
   const RatingFormDialog({
@@ -116,7 +117,10 @@ class _RatingFormDialogState extends State<RatingFormDialog> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 20),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        AudioService.instance.button(ButtonSoundType.destructive);
+                        Navigator.pop(context);
+                      },
                     ),
                   ],
                 ),
@@ -179,7 +183,10 @@ class _RatingFormDialogState extends State<RatingFormDialog> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        AudioService.instance.button(ButtonSoundType.destructive);
+                        Navigator.pop(context);
+                      },
                       child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(width: 8),
@@ -208,6 +215,7 @@ class _RatingFormDialogState extends State<RatingFormDialog> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                           onPressed: () {
+                            AudioService.instance.button(ButtonSoundType.save);
                             final name = _authorController.text.trim();
                             final comment = _commentController.text.trim();
 

@@ -23,12 +23,31 @@
 //   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"
 //       android:maxSdkVersion="30" />
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BluetoothVehicleService {
-  BluetoothVehicleService._();
+  final StreamController<Map<String, dynamic>> _eventController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get bluetoothEventStream => _eventController.stream;
+
+  BluetoothVehicleService._() {
+    _channel.setMethodCallHandler(_methodCallHandler);
+  }
+
+  Future<void> _methodCallHandler(MethodCall call) async {
+    if (call.method == 'onBluetoothVehicleEvent') {
+      final Map<dynamic, dynamic>? args = call.arguments as Map<dynamic, dynamic>?;
+      if (args != null) {
+        final Map<String, dynamic> event = args.map((key, value) => MapEntry(key.toString(), value));
+        _eventController.add(event);
+        debugPrint('BluetoothVehicleService: onBluetoothVehicleEvent received: $event');
+      }
+    }
+  }
 
   static final BluetoothVehicleService instance = BluetoothVehicleService._();
 
@@ -36,6 +55,19 @@ class BluetoothVehicleService {
       MethodChannel('com.drivecare.plus/bluetooth');
 
   static const String _prefPrefix = 'bt_car_device_';
+
+  /// Retrieves the launch intent data if the app was started via the auto-start notification.
+  Future<Map<String, dynamic>?> getStartIntentData() async {
+    try {
+      final Map<dynamic, dynamic>? data =
+          await _channel.invokeMethod<Map<dynamic, dynamic>>('getStartIntentData');
+      if (data == null) return null;
+      return data.map((key, value) => MapEntry(key.toString(), value));
+    } catch (e) {
+      debugPrint('BluetoothVehicleService.getStartIntentData error: $e');
+      return null;
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Preference helpers

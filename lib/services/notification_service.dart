@@ -11,6 +11,7 @@ import '../screens/booking_screen.dart';
 import '../screens/journey_log_screen.dart';
 import '../screens/maintenance_screen.dart';
 import '../screens/notifications_screen.dart';
+import 'audio_service.dart';
 import 'journey_database.dart';
 import 'notification_preferences.dart';
 import 'vehicle_insights.dart';
@@ -215,6 +216,7 @@ class NotificationService extends ChangeNotifier {
         'Maintenance Reminders',
         description: 'Alerts when vehicle maintenance is due soon.',
         importance: Importance.high,
+        sound: RawResourceAndroidNotificationSound('notification_sound'),
       ),
     );
 
@@ -224,6 +226,7 @@ class NotificationService extends ChangeNotifier {
         'Booking Confirmations',
         description: 'Confirms workshop appointments you have scheduled.',
         importance: Importance.high,
+        sound: RawResourceAndroidNotificationSound('notification_sound'),
       ),
     );
 
@@ -234,6 +237,7 @@ class NotificationService extends ChangeNotifier {
         description:
             'Daily reminder to confirm which detected trips were in your car.',
         importance: Importance.defaultImportance,
+        sound: RawResourceAndroidNotificationSound('notification_sound'),
       ),
     );
   }
@@ -358,6 +362,7 @@ class NotificationService extends ChangeNotifier {
             'Trip Review',
             importance: Importance.defaultImportance,
             priority: Priority.defaultPriority,
+            sound: const RawResourceAndroidNotificationSound('notification_sound'),
             // Show "Confirm Now" action button on Android.
             actions: <AndroidNotificationAction>[
               const AndroidNotificationAction(
@@ -368,7 +373,9 @@ class NotificationService extends ChangeNotifier {
               ),
             ],
           ),
-          iOS: const DarwinNotificationDetails(),
+          iOS: const DarwinNotificationDetails(
+            sound: 'notification_sound.mp3',
+          ),
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
@@ -561,8 +568,11 @@ class NotificationService extends ChangeNotifier {
             channelName,
             importance: Importance.high,
             priority: Priority.high,
+            sound: const RawResourceAndroidNotificationSound('notification_sound'),
           ),
-          iOS: const DarwinNotificationDetails(),
+          iOS: const DarwinNotificationDetails(
+            sound: 'notification_sound.mp3',
+          ),
         ),
         payload: payload,
       );
@@ -577,6 +587,8 @@ class NotificationService extends ChangeNotifier {
       _inbox = _inbox.sublist(0, _maxInboxSize);
     }
     notifyListeners();
+    // Play in-app custom notification sound
+    AudioService.instance.notification();
     await _persistInbox();
   }
 
@@ -678,8 +690,11 @@ class NotificationService extends ChangeNotifier {
             'Booking Confirmations',
             importance: Importance.high,
             priority: Priority.high,
+            sound: const RawResourceAndroidNotificationSound('notification_sound'),
           ),
-          iOS: const DarwinNotificationDetails(),
+          iOS: const DarwinNotificationDetails(
+            sound: 'notification_sound.mp3',
+          ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:

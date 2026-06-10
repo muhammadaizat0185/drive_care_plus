@@ -44,6 +44,7 @@ import '../core/theme/tokens/tokens.dart';
 import '../services/google_maps_service.dart';
 import '../services/journey_database.dart';
 import '../services/location_tracker.dart';
+import '../widgets/sound_button.dart';
 import '../widgets/ui/ui.dart';
 import 'trip_planner/_widgets.dart';
 
@@ -314,7 +315,7 @@ class _TripPlannerScreenState extends State<TripPlannerScreen> {
                     .copyWith(color: colors.foreground),
               ),
               actions: [
-                TextButton(
+                SoundTextButton.destructive(
                   onPressed: () => Navigator.pop(context, false),
                   child: const Text('Cancel'),
                 ),

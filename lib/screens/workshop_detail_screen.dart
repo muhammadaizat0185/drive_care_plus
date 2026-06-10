@@ -14,6 +14,7 @@ import '../services/notification_service.dart';
 import '../widgets/star_rating.dart';
 import '../widgets/rating_form_dialog.dart';
 import '../core/util/transaction_helper.dart';
+import '../services/audio_service.dart';
 
 class WorkshopDetailScreen extends StatefulWidget {
   const WorkshopDetailScreen({super.key, required this.workshop});
@@ -365,6 +366,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           height: 60,
           child: ElevatedButton.icon(
             onPressed: () {
+              AudioService.instance.button(ButtonSoundType.primary);
               setState(() => _showBookingSetup = true);
             },
             icon: const Icon(Icons.calendar_month, size: 20),
@@ -405,7 +407,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               ),
             ),
             TextButton.icon(
-              onPressed: _openRatingsDialog,
+              onPressed: () {
+                AudioService.instance.button(ButtonSoundType.primary);
+                _openRatingsDialog();
+              },
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Write Review'),
             ),
@@ -531,7 +536,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                   ),
                 ),
                 IconButton(
-                  onPressed: () => setState(() => _showBookingSetup = false),
+                  onPressed: () {
+                    AudioService.instance.button(ButtonSoundType.destructive);
+                    setState(() => _showBookingSetup = false);
+                  },
                   icon: const Icon(Icons.close, size: 18, color: Colors.grey),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -573,7 +581,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                   Switch.adaptive(
                     value: _isMajorService,
                     activeColor: Colors.amber,
-                    onChanged: (val) => setState(() => _isMajorService = val),
+                    onChanged: (val) {
+                      AudioService.instance.button(ButtonSoundType.toggle);
+                      setState(() => _isMajorService = val);
+                    },
                   ),
                 ],
               ),
@@ -621,6 +632,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                             visualDensity: VisualDensity.compact,
                             title: Text(service, style: const TextStyle(fontSize: 13)),
                             onChanged: (val) {
+                              AudioService.instance.button(ButtonSoundType.toggle);
                               setState(() {
                                 if (val == true) {
                                   _selectedSpecificServices.add(service);
@@ -678,7 +690,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _pickDate,
+                    onPressed: () {
+                      AudioService.instance.button(ButtonSoundType.primary);
+                      _pickDate();
+                    },
                     icon: const Icon(Icons.calendar_today, size: 16),
                     label: Text(_selectedDate == null ? 'Date' : '${_selectedDate!.day}/${_selectedDate!.month}'),
                     style: OutlinedButton.styleFrom(
@@ -717,7 +732,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                     label: const Text('Pay at Workshop'),
                     selected: _paymentMethod == 'at_workshop',
                     onSelected: (val) {
-                      if (val) setState(() => _paymentMethod = 'at_workshop');
+                      if (val) {
+                        AudioService.instance.button(ButtonSoundType.toggle);
+                        setState(() => _paymentMethod = 'at_workshop');
+                      }
                     },
                   ),
                 ),
@@ -727,7 +745,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                     label: const Text('Pay via Wallet'),
                     selected: _paymentMethod == 'wallet',
                     onSelected: (val) {
-                      if (val) setState(() => _paymentMethod = 'wallet');
+                      if (val) {
+                        AudioService.instance.button(ButtonSoundType.toggle);
+                        setState(() => _paymentMethod = 'wallet');
+                      }
                     },
                   ),
                 ),
@@ -788,7 +809,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => setState(() => _showBookingSetup = false),
+                  onPressed: () {
+                    AudioService.instance.button(ButtonSoundType.destructive);
+                    setState(() => _showBookingSetup = false);
+                  },
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -803,7 +827,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _confirmBooking,
+                  onPressed: () {
+                    AudioService.instance.button(ButtonSoundType.save);
+                    _confirmBooking();
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
@@ -969,6 +996,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           actions: [
             TextButton(
               onPressed: () {
+                AudioService.instance.button(ButtonSoundType.primary);
                 Navigator.pop(ctx);
                 Navigator.pop(context); // Go back to list
               }, 

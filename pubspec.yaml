@@ -62,6 +62,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   otp: ^3.2.0
   qr_flutter: ^4.1.0
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -100,6 +101,7 @@ flutter:
     - assets/images/cars/Car Vector/PNG/
     - assets/images/cars/Premium/
     - assets/images/manufacturers/
+    - assets/Audio/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -21,14 +21,62 @@ class LocationTaskHandler extends TaskHandler {
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    // Attempt to find the currently active journey to attach points to
-    final journeys = await JourneyDatabase.instance.getJourneys();
-    if (journeys.isNotEmpty) {
-      final latest = journeys.first;
+    // ── Stale journey recovery ────────────────────────────────────────────────
+    // If a previous recording session was killed by the OS without calling
+    // onDestroy(), there may be an open journey row (end_time == null) left in
+    // the DB.  If the open journey is older than 30 minutes, close it now using
+    // whatever points were saved before the kill.
+    final allJourneys = await JourneyDatabase.instance.getJourneys();
+    if (allJourneys.isNotEmpty) {
+      final latest = allJourneys.first;
       if (latest['end_time'] == null) {
-        _journeyId = latest['id'];
+        final staleId = latest['id'] as int;
+        final startedAt = DateTime.tryParse(
+            latest['start_time'] as String? ?? '');
+        final stale = startedAt != null &&
+            DateTime.now().difference(startedAt).inMinutes > 30;
+
+        if (stale) {
+          // Close the stale journey from its recorded points.
+          final pts =
+              await JourneyDatabase.instance.getPoints(staleId);
+          if (pts.length > 1) {
+            double meters = 0.0;
+            for (int i = 0; i < pts.length - 1; i++) {
+              meters += Geolocator.distanceBetween(
+                pts[i]['latitude'], pts[i]['longitude'],
+                pts[i + 1]['latitude'], pts[i + 1]['longitude'],
+              );
+            }
+            await JourneyDatabase.instance.endJourney(
+              staleId, meters / 1000.0,
+              latest['start_address'], null,
+            );
+          } else if (pts.isNotEmpty) {
+            await JourneyDatabase.instance
+                .endJourney(staleId, 0.0, latest['start_address'], null);
+          } else {
+            // No points at all — mark as ended with 0 distance.
+            await JourneyDatabase.instance
+                .endJourney(staleId, 0.0, latest['start_address'], null);
+          }
+          debugPrint(
+              'LocationTaskHandler: stale journey $staleId auto-closed.');
+        } else {
+          // Recent open journey — attach to it.
+          _journeyId = staleId;
+        }
       }
     }
+
+    // If no stale journey was found, attach to the current open journey.
+    if (_journeyId == null) {
+      final refreshed = await JourneyDatabase.instance.getJourneys();
+      if (refreshed.isNotEmpty && refreshed.first['end_time'] == null) {
+        _journeyId = refreshed.first['id'];
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/api_tracker_service.dart';
 import '../services/auth_cleanup_service.dart';
+import '../widgets/sound_button.dart';
 
 import '../core/theme/color_utils.dart';
 import '../core/theme/tokens/tokens.dart';
@@ -327,6 +328,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   label: 'Create Account',
                   isLoading: inFlight,
                   onPressed: inFlight ? null : _register,
+                  soundType: ButtonSoundType.save,
                 ),
                 SizedBox(height: spacing.lg),
                 // "Already have an account? Sign in" affordance —
@@ -343,7 +345,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                     ),
-                    TextButton(
+                    SoundTextButton.navigation(
                       onPressed: inFlight ? null : _onSignIn,
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.symmetric(

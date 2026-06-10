@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens/tokens.dart';
+import '../../services/audio_service.dart';
 import '_focus_indicator.dart';
 
 /// Token-driven toggle switch for the DriveCare+ Component_Library.
@@ -127,7 +128,12 @@ class AppToggleSwitch extends StatelessWidget {
 
     final Widget interactive = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: disabled ? null : () => onChanged!(!value),
+      onTap: disabled
+          ? null
+          : () {
+              AudioService.instance.button(ButtonSoundType.toggle);
+              onChanged!(!value);
+            },
       child: hitArea,
     );
 

@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme/color_utils.dart';
 import '../core/theme/tokens/tokens.dart';
+import '../services/audio_service.dart';
 import '../services/bluetooth_vehicle_service.dart';
 import '../services/car_database.dart';
 import '../services/profile_service.dart';
@@ -91,15 +92,23 @@ class VehicleScreen extends StatefulWidget {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () {
+                AudioService.instance.button(ButtonSoundType.destructive);
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
             ElevatedButton(
               onPressed: () {
                 final mileage = double.tryParse(controller.text) ?? 0.0;
                 if (mileage >= insights.currentMileageKm) {
+                  AudioService.instance.button(ButtonSoundType.save);
                   insights.updateCurrentMileage(mileage);
                   Navigator.pop(context);
                   HapticFeedback.mediumImpact();
                 } else {
+                  AudioService.instance.button(ButtonSoundType.error);
                   setDialogState(() {
                     errorText = 'Mileage cannot be lower than ${insights.currentMileageKm.toStringAsFixed(0)} km';
                   });
@@ -139,9 +148,16 @@ class VehicleScreen extends StatefulWidget {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              AudioService.instance.button(ButtonSoundType.destructive);
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
+              AudioService.instance.button(ButtonSoundType.save);
               final mileage = double.tryParse(mileageController.text) ?? insights.currentMileageKm;
               insights.logMaintenance(_selectedMaintenanceItems.toList(), mileage);
               setState(() => _selectedMaintenanceItems.clear());
@@ -259,7 +275,10 @@ class VehicleScreen extends StatefulWidget {
                           ),
                           const SizedBox(height: 32),
                           ElevatedButton.icon(
-                            onPressed: _showRegisterVehicleDialog,
+                            onPressed: () {
+                              AudioService.instance.button(ButtonSoundType.primary);
+                              _showRegisterVehicleDialog();
+                            },
                             icon: const Icon(Icons.add_circle_outline, color: Colors.white),
                             label: const Text(
                               'Register Vehicle',
@@ -595,12 +614,16 @@ class VehicleScreen extends StatefulWidget {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () {
+                  AudioService.instance.button(ButtonSoundType.destructive);
+                  Navigator.pop(ctx);
+                },
                 child: const Text('Cancel')),
             ElevatedButton(
               onPressed: selected == null
                   ? null
                   : () async {
+                      AudioService.instance.button(ButtonSoundType.save);
                       await BluetoothVehicleService.instance
                           .setCarBluetoothDevice(
                               vehicleId: vehicleId,
@@ -823,12 +846,16 @@ class VehicleScreen extends StatefulWidget {
           content: Text('Are you sure you want to remove ${insights.vehicles[index]['model']} from your garage?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                AudioService.instance.button(ButtonSoundType.destructive);
+                Navigator.pop(context);
+              },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () {
+                AudioService.instance.button(ButtonSoundType.destructive);
                 insights.deleteVehicle(index);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -933,7 +960,10 @@ class VehicleScreen extends StatefulWidget {
             ),
           ),
           ElevatedButton.icon(
-            onPressed: () => _showMileageUpdateDialog(insights),
+            onPressed: () {
+              AudioService.instance.button(ButtonSoundType.primary);
+              _showMileageUpdateDialog(insights);
+            },
             icon: const Icon(Icons.edit, size: 12),
             label: const Text('Update', style: TextStyle(fontSize: 12)),
             style: ElevatedButton.styleFrom(
@@ -1208,7 +1238,13 @@ class VehicleScreen extends StatefulWidget {
                         const SizedBox(height: 24),
                         Row(
                           children: [
-                            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                            TextButton(
+                              onPressed: () {
+                                AudioService.instance.button(ButtonSoundType.destructive);
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Cancel'),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Container(
@@ -1227,6 +1263,7 @@ class VehicleScreen extends StatefulWidget {
                                     final finalModel = '$brand $modelVal';
 
                                     if (plate.isEmpty || finalModel.isEmpty) {
+                                      AudioService.instance.button(ButtonSoundType.error);
                                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter plate and model.')));
                                       return;
                                     }
@@ -1408,7 +1445,13 @@ class VehicleScreen extends StatefulWidget {
                         const SizedBox(height: 24),
                         Row(
                           children: [
-                            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                            TextButton(
+                              onPressed: () {
+                                AudioService.instance.button(ButtonSoundType.destructive);
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Cancel'),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Container(
@@ -1427,6 +1470,7 @@ class VehicleScreen extends StatefulWidget {
                                     final finalModel = '$brand $modelVal';
 
                                     if (plate.isEmpty || finalModel.isEmpty) {
+                                      AudioService.instance.button(ButtonSoundType.error);
                                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill out plate and model.')));
                                       return;
                                     }

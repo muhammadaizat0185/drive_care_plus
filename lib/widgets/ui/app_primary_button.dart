@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens/tokens.dart';
+import '../../services/audio_service.dart';
 import '_focus_indicator.dart';
 
 /// Primary call-to-action button for the DriveCare+ Component_Library.
@@ -50,6 +51,9 @@ class AppPrimaryButton extends StatefulWidget {
   /// When `true`, the button stretches to its parent's full width.
   final bool fullWidth;
 
+  /// The sound type category to play on tap.
+  final ButtonSoundType soundType;
+
   const AppPrimaryButton({
     super.key,
     required this.label,
@@ -57,6 +61,7 @@ class AppPrimaryButton extends StatefulWidget {
     this.icon,
     this.isLoading = false,
     this.fullWidth = false,
+    this.soundType = ButtonSoundType.primary,
   });
 
   @override
@@ -99,6 +104,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
   }
 
   void _handleTap() {
+    AudioService.instance.button(widget.soundType);
     widget.onPressed?.call();
   }
 

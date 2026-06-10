@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app.dart';
+import 'services/audio_service.dart';
 import 'services/firebase_bootstrap.dart';
 import 'services/notification_preferences.dart';
 import 'services/notification_service.dart';
@@ -11,8 +13,14 @@ import 'services/vehicle_insights.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await const MethodChannel('com.drivecare.plus/bluetooth').invokeMethod('clearSecureFlags');
+  } catch (e) {
+    debugPrint('Failed to clear secure flags: $e');
+  }
   await FirebaseBootstrap.initialize();
   // Pre-load local vehicle caching & dynamic theme cache
+  await AudioService.instance.init();
   await VehicleInsights.instance.loadFromPrefs();
   await ThemeService.instance.init();
   await ProfileService.instance.init();
