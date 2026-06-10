@@ -17,6 +17,7 @@ import '../services/profile_service.dart';
 import '../services/theme_service.dart';
 import '../services/auth_cleanup_service.dart';
 import '../widgets/ui/ui.dart';
+import '../widgets/sound_button.dart';
 import 'cloud_sync_quota_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -232,16 +233,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   )
                 else
-                  TextButton(
+                  SoundTextButton.save(
                     onPressed: _isDirty ? _onSavePressed : null,
-                    child: Text(
+                    style: TextButton.styleFrom(
+                      foregroundColor: _isDirty
+                          ? colors.emerald500
+                          : colors.foreground.withValues(
+                              alpha: colors.surfaceProminent + 0.2,
+                            ),
+                    ),
+                    child: const Text(
                       'Save',
                       style: TextStyle(
-                        color: _isDirty
-                            ? colors.emerald500
-                            : colors.foreground.withValues(
-                                alpha: colors.surfaceProminent + 0.2,
-                              ),
                         fontWeight: FontWeight.bold,
                         fontSize: 16.0,
                       ),
@@ -344,6 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.logout_rounded,
                   fullWidth: true,
                   onPressed: _onSignOutPressed,
+                  soundType: ButtonSoundType.destructive,
                 ),
                 SizedBox(height: spacing.xxl),
               ],

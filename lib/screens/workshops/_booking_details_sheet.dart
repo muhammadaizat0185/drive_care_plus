@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../services/audio_service.dart';
 
 import '../../core/theme/tokens/tokens.dart';
 import '../../widgets/ui/ui.dart';
@@ -107,6 +108,7 @@ class _BookingDetailsBottomSheetState extends State<BookingDetailsBottomSheet> {
   }
 
   Future<void> _pickDate() async {
+    AudioService.instance.button(ButtonSoundType.primary);
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? DateTime.now().add(const Duration(days: 1)),
@@ -119,6 +121,7 @@ class _BookingDetailsBottomSheetState extends State<BookingDetailsBottomSheet> {
   }
 
   Future<void> _pickTime() async {
+    AudioService.instance.button(ButtonSoundType.primary);
     final picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime ?? const TimeOfDay(hour: 10, minute: 0),

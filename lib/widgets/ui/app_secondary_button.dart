@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens/tokens.dart';
+import '../../services/audio_service.dart';
 import '_focus_indicator.dart';
 import '_press_scale.dart';
 
@@ -35,12 +36,16 @@ class AppSecondaryButton extends StatelessWidget {
   /// When `true`, the button stretches to its parent's full width.
   final bool fullWidth;
 
+  /// The sound type category to play on tap.
+  final ButtonSoundType soundType;
+
   const AppSecondaryButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.icon,
     this.fullWidth = false,
+    this.soundType = ButtonSoundType.primary,
   });
 
   // `Touch_Target_Floor` from Requirement 3.10. Held as a local constant
@@ -121,7 +126,12 @@ class AppSecondaryButton extends StatelessWidget {
         borderRadius: borderRadius,
         child: PressScale(
           enabled: !disabled,
-          onTap: onPressed,
+          onTap: onPressed == null
+              ? null
+              : () {
+                  AudioService.instance.button(soundType);
+                  onPressed!();
+                },
           child: visual,
         ),
       ),

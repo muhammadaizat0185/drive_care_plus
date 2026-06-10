@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens/tokens.dart';
+import '../../services/audio_service.dart';
 import '_focus_indicator.dart';
 import '_press_scale.dart';
 import 'app_spinner.dart';
@@ -44,6 +45,9 @@ class AppGradientButton extends StatelessWidget {
   /// pattern and is laid out edge-to-edge in the redesigned screens.
   final bool fullWidth;
 
+  /// The sound type category to play on tap.
+  final ButtonSoundType soundType;
+
   const AppGradientButton({
     super.key,
     required this.label,
@@ -51,6 +55,7 @@ class AppGradientButton extends StatelessWidget {
     this.icon,
     this.isLoading = false,
     this.fullWidth = true,
+    this.soundType = ButtonSoundType.primary,
   });
 
   // `Touch_Target_Floor` from Requirement 3.10. Held as a local constant
@@ -147,7 +152,12 @@ class AppGradientButton extends StatelessWidget {
         borderRadius: borderRadius,
         child: PressScale(
           enabled: gesturesEnabled,
-          onTap: onPressed,
+          onTap: onPressed == null
+              ? null
+              : () {
+                  AudioService.instance.button(soundType);
+                  onPressed!();
+                },
           child: visual,
         ),
       ),

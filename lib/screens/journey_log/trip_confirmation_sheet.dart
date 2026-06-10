@@ -24,6 +24,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/color_utils.dart';
 import '../../core/theme/tokens/tokens.dart';
+import '../../services/audio_service.dart';
 import '../../services/journey_database.dart';
 import '../../services/vehicle_insights.dart';
 import '../../widgets/ui/ui.dart';
@@ -357,6 +358,7 @@ class _TripConfirmationSheetState extends State<TripConfirmationSheet> {
                         label: 'Confirm All Trips',
                         icon: Icons.check_circle_outline,
                         onPressed: _confirmAll,
+                        soundType: ButtonSoundType.save,
                       ),
               ),
             ],
@@ -393,7 +395,10 @@ class _MasterChip extends StatelessWidget {
     final AppColorsExt colors = Theme.of(context).extension<AppColorsExt>()!;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        AudioService.instance.button(ButtonSoundType.toggle);
+        onTap();
+      },
       child: Container(
         padding: EdgeInsets.symmetric(
             horizontal: spacing.md, vertical: spacing.sm),
@@ -576,7 +581,10 @@ class _AttributionChip extends StatelessWidget {
         : colors.muted;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        AudioService.instance.button(ButtonSoundType.toggle);
+        onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: EdgeInsets.symmetric(

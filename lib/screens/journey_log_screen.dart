@@ -22,14 +22,16 @@
 import 'package:flutter/material.dart';
 
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
 import '../core/theme/color_utils.dart';
 import '../core/theme/tokens/tokens.dart';
+import '../services/audio_service.dart';
 import '../services/journey_database.dart';
+import '../services/location_tracker.dart';
 import '../services/profile_service.dart';
 import '../services/vehicle_insights.dart';
-import '../widgets/pending_journey_card.dart';
 import '../widgets/ui/ui.dart';
 import 'journey_log/trip_confirmation_sheet.dart';
 import 'journey_log/mileage_impact_screen.dart';
@@ -43,11 +45,15 @@ class JourneyLogScreen extends StatefulWidget {
   State<JourneyLogScreen> createState() => _JourneyLogScreenState();
 }
 
-class _JourneyLogScreenState extends State<JourneyLogScreen> {
+class _JourneyLogScreenState extends State<JourneyLogScreen>
+    with WidgetsBindingObserver {
   List<Map<String, dynamic>> _allJourneys = [];
   bool _isLoading = true;
   int? _selectedJourneyId;
   List<LatLng> _selectedPoints = [];
+
+  /// GoogleMap controller — used to animate the camera after points load.
+  GoogleMapController? _mapController;
 
   // Date navigation — defaults to today.
   DateTime _viewDate = DateTime.now();
@@ -61,7 +67,23 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadJourneys();
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh whenever the user comes back to the app after a background trip.
+      _loadJourneys();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -92,15 +114,67 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
       final pointsData =
           await JourneyDatabase.instance.getPoints(_selectedJourneyId!);
       if (mounted) {
-        setState(() {
-          _selectedPoints = pointsData
-              .map((p) => LatLng(p['latitude'], p['longitude']))
-              .toList();
-        });
+        final pts = pointsData
+            .map((p) => LatLng(p['latitude'], p['longitude']))
+            .toList();
+        setState(() => _selectedPoints = pts);
+        // Animate map to the loaded points.
+        await _animateCameraToPoints(pts);
       }
     } catch (e) {
       debugPrint('Error loading points: $e');
     }
+  }
+
+  /// Fit the map camera to [points]. Falls back to the device's current
+  /// location when there are no saved GPS points yet (active trip just started).
+  Future<void> _animateCameraToPoints(List<LatLng> points) async {
+    final ctrl = _mapController;
+    if (ctrl == null) return;
+
+    if (points.isEmpty) {
+      // No recorded points yet — try to pan to the user's current position.
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+            locationSettings:
+                const LocationSettings(accuracy: LocationAccuracy.low));
+        await ctrl.animateCamera(CameraUpdate.newCameraPosition(
+          CameraPosition(
+              target: LatLng(pos.latitude, pos.longitude), zoom: 15),
+        ));
+      } catch (_) {
+        // Permission denied or timeout — leave the camera where it is.
+      }
+      return;
+    }
+
+    if (points.length == 1) {
+      await ctrl.animateCamera(CameraUpdate.newCameraPosition(
+        CameraPosition(target: points.first, zoom: 15),
+      ));
+      return;
+    }
+
+    // Compute bounding box and fit with padding.
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+    await ctrl.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        ),
+        64, // padding in logical pixels
+      ),
+    );
   }
 
   Future<void> _confirmVehicle(int journeyId, String vehicleType) async {
@@ -223,44 +297,8 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
     final double confirmedKm = _confirmedKmForDate(_viewDate);
     final double estimatedCost = confirmedKm * 0.22;
 
-    // Map camera — compute bounding box of selected points.
-    LatLng centerLatLng = const LatLng(3.1390, 101.6869);
-    double calculatedZoom = 13.0;
-
-    if (_selectedPoints.isNotEmpty) {
-      double minLat = _selectedPoints.first.latitude;
-      double maxLat = _selectedPoints.first.latitude;
-      double minLng = _selectedPoints.first.longitude;
-      double maxLng = _selectedPoints.first.longitude;
-
-      for (var p in _selectedPoints) {
-        if (p.latitude < minLat) minLat = p.latitude;
-        if (p.latitude > maxLat) maxLat = p.latitude;
-        if (p.longitude < minLng) minLng = p.longitude;
-        if (p.longitude > maxLng) maxLng = p.longitude;
-      }
-
-      centerLatLng = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-      final maxSpan = ((maxLat - minLat) > (maxLng - minLng))
-          ? (maxLat - minLat)
-          : (maxLng - minLng);
-      if (maxSpan > 1.0) {
-        calculatedZoom = 8.0;
-      } else if (maxSpan > 0.5) {
-        calculatedZoom = 10.0;
-      } else if (maxSpan > 0.1) {
-        calculatedZoom = 12.0;
-      } else if (maxSpan > 0.01) {
-        calculatedZoom = 13.5;
-      } else {
-        calculatedZoom = 15.0;
-      }
-    }
-
     // Build map polylines for ALL journeys of the day (coloured by status).
     final Set<Polyline> allPolylines = {};
-    // For now we show the selected journey's points; future iteration will
-    // load all day's polylines in parallel.
     if (_selectedPoints.isNotEmpty) {
       final selectedJourney = dayJourneys.firstWhere(
           (j) => j['id'] == _selectedJourneyId,
@@ -305,11 +343,19 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
               height:
                   MediaQuery.of(context).size.height * _mapHeightFraction,
               child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: centerLatLng,
-                  zoom: calculatedZoom,
+                initialCameraPosition: const CameraPosition(
+                  // A neutral starting position; the controller will animate
+                  // to the actual route as soon as onMapCreated fires.
+                  target: LatLng(3.1390, 101.6869),
+                  zoom: 6,
                 ),
-                myLocationEnabled: false,
+                onMapCreated: (controller) {
+                  _mapController = controller;
+                  // Immediately fly to the selected journey's points.
+                  _animateCameraToPoints(_selectedPoints);
+                },
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
                 mapToolbarEnabled: false,
                 compassEnabled: false,
@@ -604,7 +650,10 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
                 left: spacing.xl,
                 right: spacing.xl,
                 child: GestureDetector(
-                  onTap: () => _openConfirmationSheet(pendingJourneys),
+                  onTap: () {
+                    AudioService.instance.button(ButtonSoundType.primary);
+                    _openConfirmationSheet(pendingJourneys);
+                  },
                   child: Container(
                     padding: EdgeInsets.symmetric(
                         horizontal: spacing.lg, vertical: spacing.md),
@@ -646,17 +695,21 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
 
   Widget _buildJourneyCard(
       Map<String, dynamic> journey, AppColorsExt colors) {
-    final status = journey['status'] as String? ?? '';
-    if (status == 'pending' || status == 'PENDING_CONFIRMATION') {
-      return PendingJourneyCard(
-        journey: journey,
-        onConfirmMyCar: () =>
-            _confirmVehicle(journey['id'], 'my_car'),
-        onConfirmOther: () =>
-            _confirmVehicle(journey['id'], 'other'),
-      );
-    }
-    return _ConfirmedJourneyCard(journey: journey);
+    // All trips — whether confirmed, pending, or active — now use the same
+    // _ConfirmedJourneyCard which shows the status badge and an "End Trip"
+    // button for active trips. Pending trips are surfaced via the sticky badge.
+    return _ConfirmedJourneyCard(
+      journey: journey,
+      onEndTrip: journey['end_time'] == null
+          ? () async {
+              // User manually ends an active trip.
+              await LocationTracker.stopTracking();
+              // Give onDestroy() 2 s to write the finalised row.
+              await Future.delayed(const Duration(seconds: 2));
+              if (mounted) _loadJourneys();
+            }
+          : null,
+    );
   }
 
   Color _polylineColor(
@@ -677,8 +730,10 @@ class _JourneyLogScreenState extends State<JourneyLogScreen> {
 
 class _ConfirmedJourneyCard extends StatelessWidget {
   final Map<String, dynamic> journey;
+  /// Callback to manually end an active (recording) trip. Null for finished trips.
+  final Future<void> Function()? onEndTrip;
 
-  const _ConfirmedJourneyCard({required this.journey});
+  const _ConfirmedJourneyCard({required this.journey, this.onEndTrip});
 
   String _formatDateTime(String? isoString) {
     if (isoString == null) return 'Active';
@@ -705,12 +760,24 @@ class _ConfirmedJourneyCard extends StatelessWidget {
     final String destAddr =
         journey['destination_address'] as String? ?? 'No destination set';
     final bool isActive = journey['end_time'] == null;
+    final String status = journey['status'] as String? ?? '';
+    final bool isPending =
+        status == 'PENDING_CONFIRMATION' || status == 'pending';
     final String vt = journey['vehicle_type'] as String? ?? '';
 
     final Color mutedFg =
         colors.foreground.withValues(alpha: colors.surfaceProminent + 0.4);
-    final Color statusColor =
-        isActive ? colors.warning : colors.emerald500;
+    // Active trips (still recording): warning amber
+    // Pending-confirmation trips: amber
+    // Confirmed trips: emerald
+    final Color statusColor = isActive || isPending
+        ? colors.warning
+        : colors.emerald500;
+    final String statusLabel = isActive
+        ? 'Active Trip'
+        : isPending
+            ? 'Pending Confirmation'
+            : 'Confirmed Trip';
 
     return AppCard(
       child: Column(
@@ -728,7 +795,7 @@ class _ConfirmedJourneyCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(radii.small),
                 ),
                 child: Text(
-                  isActive ? 'Active Trip' : 'Confirmed Trip',
+                  statusLabel,
                   style: typography.label.copyWith(color: statusColor),
                 ),
               ),
@@ -824,6 +891,41 @@ class _ConfirmedJourneyCard extends StatelessWidget {
                 ),
             ],
           ),
+          // Active trip — show End Trip button so user can stop recording manually
+          if (isActive && onEndTrip != null) ...[
+            SizedBox(height: spacing.sm),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onEndTrip,
+                icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                label: const Text('End Trip'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.warning,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(radii.small)),
+                ),
+              ),
+            ),
+          ],
+          // Pending-confirmation trip — nudge toward the sticky badge
+          if (!isActive && isPending) ...[
+            SizedBox(height: spacing.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.touch_app_outlined,
+                    size: 14, color: colors.warning),
+                SizedBox(width: spacing.xs),
+                Text(
+                  'Tap the review badge below to confirm',
+                  style: typography.label
+                      .copyWith(color: colors.warning),
+                ),
+              ],
+            ),
+          ],
           // Phase 5: deviation badge — only shown when a planned distance exists
           Builder(builder: (_) {
             final deviationRaw = journey['deviation_km'];

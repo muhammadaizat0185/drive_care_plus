@@ -28,10 +28,45 @@ class _CloudSyncQuotaScreenState extends State<CloudSyncQuotaScreen> {
     'System Connectivity': _ConnectionStatus.checking,
   };
 
+  String? _firestoreError;
+
   @override
   void initState() {
     super.initState();
     _checkConnectionHealth();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _fetchWithBackoff() async {
+    int retries = 3;
+    int delayMs = 1000;
+
+    while (true) {
+      try {
+        return await FirebaseFirestore.instance
+            .collection('health_check')
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 4));
+      } on FirebaseException catch (e) {
+        if (e.code == 'unavailable' && retries > 0) {
+          retries--;
+          debugPrint('Firestore health check: unavailable. Retrying in ${delayMs}ms...');
+          await Future.delayed(Duration(milliseconds: delayMs));
+          delayMs *= 2;
+          continue;
+        }
+        rethrow;
+      } catch (e) {
+        if (retries > 0) {
+          retries--;
+          debugPrint('Firestore health check: $e. Retrying in ${delayMs}ms...');
+          await Future.delayed(Duration(milliseconds: delayMs));
+          delayMs *= 2;
+          continue;
+        }
+        rethrow;
+      }
+    }
   }
 
   Future<void> _checkConnectionHealth() async {
@@ -43,9 +78,20 @@ class _CloudSyncQuotaScreenState extends State<CloudSyncQuotaScreen> {
       final isFirebaseInit = Firebase.apps.isNotEmpty;
       _updateConnection('Firebase Core', isFirebaseInit ? _ConnectionStatus.online : _ConnectionStatus.offline);
       
-      await FirebaseFirestore.instance.collection('health_check').limit(1).get().timeout(const Duration(seconds: 5));
+      await _fetchWithBackoff();
+      if (mounted) {
+        setState(() => _firestoreError = null);
+      }
       _updateConnection('Cloud Firestore', _ConnectionStatus.online);
-    } catch (_) {
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() => _firestoreError = '[${e.code.toUpperCase()}] ${e.message}');
+      }
+      _updateConnection('Cloud Firestore', _ConnectionStatus.offline);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _firestoreError = e.toString());
+      }
       _updateConnection('Cloud Firestore', _ConnectionStatus.offline);
     }
 
@@ -76,6 +122,7 @@ class _CloudSyncQuotaScreenState extends State<CloudSyncQuotaScreen> {
 
   void _refreshAll() {
     setState(() {
+      _firestoreError = null;
       _connectionStates.updateAll((key, value) => _ConnectionStatus.checking);
     });
     _checkConnectionHealth();
@@ -153,6 +200,7 @@ class _CloudSyncQuotaScreenState extends State<CloudSyncQuotaScreen> {
                           icon: _getIconForApi(apiName),
                           status: status,
                           txCount: txCount,
+                          errorMessage: apiName == 'Cloud Firestore' ? _firestoreError : null,
                         );
                       }),
                       Divider(height: spacing.xl, color: colors.border),
@@ -196,12 +244,14 @@ class _ApiStatusRow extends StatelessWidget {
     required this.icon,
     required this.status,
     required this.txCount,
+    this.errorMessage,
   });
 
   final String name;
   final IconData icon;
   final _ConnectionStatus status;
   final int txCount;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -270,6 +320,17 @@ class _ApiStatusRow extends StatelessWidget {
                     color: colors.foreground.withValues(alpha: colors.surfaceProminent),
                   ),
                 ),
+                if (status == _ConnectionStatus.offline && errorMessage != null) ...[
+                  SizedBox(height: spacing.xs),
+                  Text(
+                    errorMessage!,
+                    style: typography.body.copyWith(
+                      color: colors.error,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -5,6 +5,7 @@ import '../services/api_tracker_service.dart';
 import '../services/auth_cleanup_service.dart';
 import '../services/biometric_service.dart';
 import '../services/totp_service.dart';
+import '../widgets/sound_button.dart';
 import 'totp_verification_screen.dart';
 
 import '../core/theme/color_utils.dart';
@@ -432,7 +433,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 // the entered field values (Requirement 5.8).
                 Align(
                   alignment: AlignmentDirectional.centerEnd,
-                  child: TextButton(
+                  child: SoundTextButton(
                     onPressed: inFlight ? null : _onForgotPassword,
                     child: Text(
                       'Forgot password?',
@@ -486,7 +487,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    TextButton(
+                    SoundTextButton.navigation(
                       onPressed: inFlight ? null : _onSignUp,
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.symmetric(

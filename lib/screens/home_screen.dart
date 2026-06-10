@@ -20,7 +20,12 @@ import 'wallet_history_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/onboarding_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../services/activity_recognition_service.dart';
+import '../services/bluetooth_vehicle_service.dart';
+import '../services/journey_database.dart';
+import '../services/location_tracker.dart';
 import '../services/toyyibpay_service.dart';
 import 'toyyibpay_webview_screen.dart';
 import '../core/util/transaction_helper.dart';
@@ -50,6 +55,8 @@ class _HomeScreenState extends State<HomeScreen> {
     const WalletHistoryScreen(),
   ];
 
+  StreamSubscription<Map<String, dynamic>>? _bluetoothSub;
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
     HomeScreen.activeTabNotifier.addListener(_onTabChanged);
     _checkFirstLaunchOnboarding();
     ActivityRecognitionService.instance.startListening();
+    _initBluetoothAutoTracking();
   }
 
   Future<void> _checkFirstLaunchOnboarding() async {
@@ -84,8 +92,88 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _bluetoothSub?.cancel();
     HomeScreen.activeTabNotifier.removeListener(_onTabChanged);
     super.dispose();
+  }
+
+  Future<void> _initBluetoothAutoTracking() async {
+    // 1. Check if app was launched via Bluetooth notification
+    final startData = await BluetoothVehicleService.instance.getStartIntentData();
+    if (startData != null && startData['autoStartTracking'] == true) {
+      final String? vehicleId = startData['vehicleId'] as String?;
+      if (vehicleId != null && vehicleId.isNotEmpty) {
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          _handleBluetoothAutoStart(vehicleId);
+        });
+      }
+    }
+
+    // 2. Listen for live connection events from native
+    _bluetoothSub = BluetoothVehicleService.instance.bluetoothEventStream.listen((event) {
+      final bool connected = event['connected'] == true;
+      final String? vehicleId = event['vehicleId'] as String?;
+      if (connected && vehicleId != null && vehicleId.isNotEmpty) {
+        _handleBluetoothAutoStart(vehicleId);
+      } else if (!connected) {
+        _handleBluetoothAutoStop();
+      }
+    });
+  }
+
+  Future<void> _handleBluetoothAutoStart(String vehicleId) async {
+    if (await FlutterForegroundTask.isRunningService) {
+      debugPrint('HomeScreen: Tracking is already active. Ignoring BT trigger.');
+      return;
+    }
+
+    final journeys = await JourneyDatabase.instance.getJourneys();
+    final bool hasActive = journeys.any((j) => j['end_time'] == null);
+    if (hasActive) {
+      debugPrint('HomeScreen: Active journey exists in DB. Yielding.');
+      return;
+    }
+
+    debugPrint('HomeScreen: Starting auto-tracking for vehicle $vehicleId');
+    final id = await JourneyDatabase.instance.startJourney(
+      status: 'PENDING_CONFIRMATION',
+    );
+    await JourneyDatabase.instance.updateJourneyAttribution(
+      id,
+      vehicleId: vehicleId,
+      vehicleType: 'my_car',
+      transportMode: 'driving',
+      source: 'bluetooth_auto',
+    );
+
+    LocationTracker.initForegroundTask();
+    await LocationTracker.startTracking();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🚗 Car Connected: Trip tracking started automatically!'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleBluetoothAutoStop() async {
+    if (await FlutterForegroundTask.isRunningService) {
+      debugPrint('HomeScreen: Stopping auto-tracking due to BT disconnect.');
+      await LocationTracker.stopTracking();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🔌 Car Disconnected: Trip tracking stopped.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _onTabChanged() {

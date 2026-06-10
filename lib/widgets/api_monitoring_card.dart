@@ -20,10 +20,45 @@ class _ApiMonitoringCardState extends State<ApiMonitoringCard> {
     'System Connectivity': _ApiStatus.checking,
   };
 
+  String? _firestoreError;
+
   @override
   void initState() {
     super.initState();
     _checkAllApis();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _fetchWithBackoff() async {
+    int retries = 3;
+    int delayMs = 1000;
+
+    while (true) {
+      try {
+        return await FirebaseFirestore.instance
+            .collection('health_check')
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 4));
+      } on FirebaseException catch (e) {
+        if (e.code == 'unavailable' && retries > 0) {
+          retries--;
+          debugPrint('Firestore health check: unavailable. Retrying in ${delayMs}ms...');
+          await Future.delayed(Duration(milliseconds: delayMs));
+          delayMs *= 2;
+          continue;
+        }
+        rethrow;
+      } catch (e) {
+        if (retries > 0) {
+          retries--;
+          debugPrint('Firestore health check: $e. Retrying in ${delayMs}ms...');
+          await Future.delayed(Duration(milliseconds: delayMs));
+          delayMs *= 2;
+          continue;
+        }
+        rethrow;
+      }
+    }
   }
 
   Future<void> _checkAllApis() async {
@@ -36,9 +71,20 @@ class _ApiMonitoringCardState extends State<ApiMonitoringCard> {
       _updateState('Firebase Core', isFirebaseInit ? _ApiStatus.online : _ApiStatus.offline);
       
       // Firestore check
-      await FirebaseFirestore.instance.collection('health_check').limit(1).get().timeout(const Duration(seconds: 5));
+      await _fetchWithBackoff();
+      if (mounted) {
+        setState(() => _firestoreError = null);
+      }
       _updateState('Cloud Firestore', _ApiStatus.online);
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() => _firestoreError = '[${e.code.toUpperCase()}] ${e.message}');
+      }
+      _updateState('Cloud Firestore', _ApiStatus.offline);
     } catch (e) {
+      if (mounted) {
+        setState(() => _firestoreError = e.toString());
+      }
       _updateState('Cloud Firestore', _ApiStatus.offline);
     }
 
@@ -76,7 +122,7 @@ class _ApiMonitoringCardState extends State<ApiMonitoringCard> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
+        side: BorderSide(color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -93,6 +139,7 @@ class _ApiMonitoringCardState extends State<ApiMonitoringCard> {
                 IconButton(
                   onPressed: () {
                     setState(() {
+                      _firestoreError = null;
                       _apiStates.updateAll((key, value) => _ApiStatus.checking);
                     });
                     _checkAllApis();
@@ -108,7 +155,7 @@ class _ApiMonitoringCardState extends State<ApiMonitoringCard> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.05),
+                color: primaryColor.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -160,17 +207,35 @@ class _ApiMonitoringCardState extends State<ApiMonitoringCard> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                if (name == 'Cloud Firestore' && status == _ApiStatus.offline && _firestoreError != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _firestoreError!,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
