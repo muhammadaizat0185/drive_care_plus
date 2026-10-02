@@ -44,7 +44,7 @@
             android:value="2" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyCbAOi4YqBze7HcVNXHuqVUDp9B9HHNRWE" />
+            android:value="${googleMapsApiKey}" />
 
         <!-- Foreground Service Components -->
         <service

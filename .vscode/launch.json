@@ -1,0 +1,39 @@
+{
+  // Launch configurations for DriveCare+.
+  //
+  // The Google Maps / Places API key is never committed to source; it is
+  // injected at build time. These configs read it from the GOOGLE_MAPS_API_KEY
+  // environment variable so the Run button works without hard-coding a secret.
+  //
+  // Setup: define GOOGLE_MAPS_API_KEY as a user/system environment variable
+  // (the native Android manifest placeholder also reads it from System.getenv).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "DriveCare+ (debug)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=GOOGLE_MAPS_API_KEY=${env:GOOGLE_MAPS_API_KEY}"
+      ]
+    },
+    {
+      "name": "DriveCare+ (profile mode)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile",
+      "args": [
+        "--dart-define=GOOGLE_MAPS_API_KEY=${env:GOOGLE_MAPS_API_KEY}"
+      ]
+    },
+    {
+      "name": "DriveCare+ (release mode)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "args": [
+        "--dart-define=GOOGLE_MAPS_API_KEY=${env:GOOGLE_MAPS_API_KEY}"
+      ]
+    }
+  ]
+}

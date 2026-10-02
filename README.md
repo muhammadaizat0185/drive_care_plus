@@ -1,109 +1,152 @@
-# 🚗 DriveCare+ (BIT34103 – Mobile Application Development)
+# DriveCare+ 🚗
 
-Welcome to the **DriveCare+** repository! This project is set up with a secure **Firebase Auth & Cloud Firestore** backend, interactive calculators, a driving simulator, and standard styling. 
+> An all-in-one vehicle care & workshop-booking companion app built with **Flutter** and **Firebase** — manage your garage, log refuels, track journeys, book workshops, top up a wallet, and secure your account with biometrics + 2FA.
 
----
-
-## 👥 Git & GitHub Collaboration Guide
-If you are new to Git and GitHub, **don't panic!** This guide contains everything you need to know to collaborate smoothly on our project without breaking each other's code.
+A mobile application project demonstrating real-world integrations (Google Maps/Places, Firebase Auth & Firestore, ToyyibPay payments), a token-driven theming system, local-first caching with cloud sync, and a broad automated test suite.
 
 ---
 
-### 🌿 Why We Use "Branches"
-Think of our project as a **shared folder**. If both of us edit the exact same file at the exact same second, our edits will overwrite each other. 
-To prevent this, we use **Branches**:
-* **`main` Branch**: This is the stable, fully working version of our app. **Never edit files directly on `main`!**
-* **Feature Branches**: Before you start writing any code, you will create a personal branch (like a private photocopy of the code). You do all your work there. Once it's finished and tested, we merge it back into `main` together.
+## ✨ Highlights
+
+- **🔐 Secure by design** — Android biometric login, Google Authenticator-compatible TOTP 2FA, and biometric authorization for wallet transactions.
+- **🚙 Vehicle management** — register vehicles, view health gauges, browse a structured car-spec database, and customize a car avatar.
+- **⛽ Refuel & journey logs** — record refuel entries, track journeys with background location, and see mileage impact analytics.
+- **🗺️ Workshop marketplace** — discover nearby workshops on a map, browse services & pricing, and manage bookings.
+- **📅 Smart reminders** — zoned local notifications fire 30 minutes before and at the exact start of a booking, plus daily trip reviews.
+- **💳 Wallet & payments** — in-app wallet with top-ups and Pro subscriptions via the ToyyibPay payment gateway (sandbox).
+- **🎨 Dynamic theming** — a design-token architecture that rebuilds the entire light/dark theme from a single seed color.
+- **🗄️ Document vault** — store and view vehicle documents (registration, insurance, etc.).
 
 ---
 
-### 🔄 The Daily 3-Step "Golden Loop"
+## 🧱 Tech Stack
 
-Follow this workflow every time you work on the app to avoid errors and merge conflicts.
-
-#### ☀️ Step 1: Start of Day (Get the Latest Code)
-Before you write any code, make sure you have the newest changes your teammates pushed.
-
-1. Open your terminal in VS Code and switch to `main`:
-   ```powershell
-   git checkout main
-   ```
-2. Pull the newest changes from GitHub to your computer:
-   ```powershell
-   git pull origin main
-   ```
-3. Create your own branch for your task (Use a descriptive name like `feature/yourname-screenname`):
-   ```powershell
-   git checkout -b feature/aizat-refuel-calculator
-   ```
-
-Now you are in your safe sandbox! You can run the app and edit files freely.
+| Layer | Technology |
+|-------|------------|
+| Framework | Flutter / Dart (SDK `^3.11.1`) |
+| Auth & data | Firebase Auth, Cloud Firestore, Firebase Storage, Remote Config |
+| Maps & location | Google Maps SDK, Places API (New), Routes API, Roads API, `geolocator`, `geocoding` |
+| Payments | ToyyibPay (sandbox) via REST + a Firebase Cloud Function webhook |
+| Security | `local_auth` (biometrics), `flutter_secure_storage`, `otp` + `qr_flutter` (TOTP 2FA) |
+| Notifications | `flutter_local_notifications` + `timezone` (zoned scheduling) |
+| Background tracking | `flutter_foreground_task`, `flutter_activity_recognition` |
+| Local persistence | `sqflite`, `shared_preferences` |
+| Animation & UI | `lottie`, `flutter_svg`, custom design-token theme system |
 
 ---
 
-#### 💻 Step 2: Coding & Testing
-* Work on your specific files (e.g., adding a button, designing a page, or linking a database).
-* Run `flutter run` frequently to make sure your changes are working.
-* **Tip**: Tell your teammates what files you are editing so they don't work on the same file at the same time!
+## 🏗️ Architecture
+
+DriveCare+ follows a **local-first, cloud-sync** model:
+
+- **Local cache** (`sqflite` / `SharedPreferences` / `VehicleInsights`) keeps the app usable offline and instant on open.
+- **Firestore synchronization** restores vehicles, bookings, refuel logs, and vault documents on login and writes changes back to the cloud.
+- **Service layer** (`lib/services/`) isolates every external dependency — Firebase, Google APIs, ToyyibPay, notifications, biometrics, TOTP — behind focused single-responsibility services.
+- **Design-token theming** (`lib/core/theme/`) drives the whole UI from one seed color; the theme pair is rebuilt atomically so light/dark always move together.
+
+### Project structure
+
+```
+lib/
+├── main.dart                 # Startup: Firebase, services, notifications bootstrap
+├── app.dart                  # Root MaterialApp + named-route table
+├── firebase_options.dart     # Firebase project config
+├── core/                     # Theme tokens & utilities
+├── models/                   # Data models (Workshop, vehicles, etc.)
+├── screens/                  # Feature screens (see list below)
+├── services/                 # Firebase, Maps, ToyyibPay, biometric, TOTP, notifications…
+└── widgets/                  # Reusable UI component library
+functions/
+└── index.js                  # ToyyibPay webhook (Firebase Cloud Function)
+test/                         # Unit, widget & property-based test suites
+```
+
+### Feature screens
+Splash · Login · Register · Home (Cockpit) · Vehicle / Garage · Vehicle Customizer · Maintenance · Trip Planner · Trip Tracking · Journey Log · Mileage Impact · Booking · Refuel Log · Workshop Map · Workshop Detail · Wallet History · Document Vault · Document Viewer · Notifications · Settings · TOTP Setup · TOTP Verification · ToyyibPay WebView · Cloud Sync & API Monitor.
 
 ---
 
-#### 🌙 Step 3: End of Day (Save & Push Your Work)
-When your feature is working and ready to share, save it to GitHub.
+## 🚀 Getting Started
 
-1. Stage your changes:
-   ```powershell
-   git add .
-   ```
-2. Commit (save) your changes with a clear description:
-   ```powershell
-   git commit -m "Added a dynamic list to show past refuel logs"
-   ```
-3. Push your branch to GitHub for your teammate to see:
-   ```powershell
-   git push origin feature/yourname-screenname
-   ```
+### Prerequisites
+- **Flutter** SDK with Dart `^3.11.1`
+- **Android SDK** (minSdk 24) — Android is the primary platform
+- A machine with Java compatible with Gradle 8.13 (Java 17–23; **not** Java 25/26)
 
----
+### 1. Install dependencies
+```bash
+flutter pub get
+```
 
-### 🤝 How to Merge Your Work (Pull Requests)
+### 2. Configure the Google Maps / Places API key
+The API key is **not committed to source** — it is injected at build time and consumed by two independent readers (Dart and the native Android manifest). Set both in one run command:
 
-Once you push your branch, do **not** merge it on your computer. Merge it on the GitHub website:
+```bash
+flutter run --dart-define=GOOGLE_MAPS_API_KEY=<YOUR_KEY> -PGOOGLE_MAPS_API_KEY=<YOUR_KEY>
+```
 
-1. Go to our repository page on [GitHub](https://github.com/).
-2. You will see a yellow banner saying: **"Compare & pull request"**. Click on it!
-3. Add a short description of what you completed, then click **Create pull request**.
-4. Send the link to your teammate to review!
-5. If there are no conflicts, click the green **"Merge pull request"** button to combine your code into the `main` branch. 
+To avoid retyping, set a session/user environment variable called `GOOGLE_MAPS_API_KEY` (the Gradle layer reads it automatically), then pass `--dart-define` as above.
 
----
+> Recommended: restrict the key in Google Cloud Console to your package name + signing SHA-1 and to only the Maps/Places/Routes/Roads APIs.
 
-### ⚠️ What is a "Merge Conflict" and How to Fix It?
-A merge conflict happens when you and a teammate edit the **same line of the same file** on different branches, and Git doesn't know which one to keep.
+### 3. Firebase
+The Android `google-services.json` and `lib/firebase_options.dart` are included and point to the project's Firebase app. To run against your **own** backend, replace them with your Firebase project's files (`flutterfire configure`).
 
-If you see a merge conflict warning in VS Code, **stay calm!** It is easy to fix:
-1. VS Code will highlight the conflicting lines in **Red** and **Green**.
-2. You will see three options above the conflict:
-   * **Accept Current Change**: Keeps your version.
-   * **Accept Incoming Change**: Keeps your teammate's version.
-   * **Accept Both Changes**: Keeps both of them.
-3. Simply click the option that makes sense, save the file, commit, and push!
+### 4. ToyyibPay (wallet / payments)
+Payment features run against the **ToyyibPay sandbox** (`dev.toyyibpay.com`) and are a demo integration. The secret key is read from **Firebase Remote Config** (`toyyibpay_secret_key`) — it is never hard-coded, so wallet top-ups stay inactive until you publish a value in Remote Config.
+
+### Run the app
+```bash
+flutter run
+```
 
 ---
 
-## 🛠️ Flutter Development Tips
-* To get all packages when you first download the repository, run:
-  ```powershell
-  flutter pub get
-  ```
-* Before pushing your branch, run the static analyzer to make sure there are no errors in your code:
-  ```powershell
-  flutter analyze
-  ```
-* If you experience compilation locks or build errors locally, stop gradle daemons and try running:
-  ```powershell
-  flutter clean
-  flutter run
-  ```
+## 🧪 Testing
 
-Let's work together to make **DriveCare+** an amazing application! 🚀
+The project ships a broad suite under `test/` (unit, widget, and property-based tests) plus custom lint guards under `tool/`.
+
+```bash
+flutter analyze          # static analysis
+flutter test             # full test suite
+```
+
+A GitHub Actions workflow (`.github/workflows/ci.yml`) runs a **reference-source guard → analyze → test → debug APK build** on every push/PR.
+
+---
+
+## 🔒 Security Notes
+
+- No API keys, secrets, or signing material are committed to source. The Maps key and ToyyibPay secret are supplied via build-time injection and Remote Config, respectively.
+- `.gitignore` excludes keystores (`*.jks`, `*.keystore`), signing config (`key.properties`), and environment files (`.env`).
+- The ToyyibPay webhook is received by a Cloud Function that performs atomic Firestore transactions for wallet ledger updates.
+
+---
+
+## 📸 Screenshots
+
+> App screenshots are coming soon. They'll be captured from a running build and
+> added here as a gallery of the Cockpit, Garage, Workshop Map, Wallet, and
+> Settings screens.
+
+<!-- To add a gallery later: place images in assets/images/screenshots/ then uncomment:
+
+| Cockpit | Garage | Workshop Map | Wallet |
+|:---:|:---:|:---:|:---:|
+| ![](assets/images/screenshots/home.png) | ![](assets/images/screenshots/garage.png) | ![](assets/images/screenshots/workshop_map.png) | ![](assets/images/screenshots/wallet.png) |
+
+-->
+
+---
+
+## 📄 License
+
+This project is created as part of a Mobile App Development coursework/portfolio. If you plan to keep it public, consider adding an open-source license (e.g. MIT) to clarify reuse terms.
+
+---
+
+## 👤 Author
+
+Built by **muhammadaizat0185** — a Flutter/Firebase vehicle-care showcase.
+
+_If you found this useful, consider starring the repo. ⭐_
