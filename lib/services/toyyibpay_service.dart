@@ -16,7 +16,10 @@ class ToyyibPayService {
       final value = FirebaseRemoteConfig.instance.getString('toyyibpay_secret_key');
       if (value.isNotEmpty) return value;
     } catch (_) {}
-    return 'zgwnuduz-sfse-uiuk-u58l-3nyvv4w7lu34'; // Fallback
+    // No secret is committed to source. The value must be supplied at runtime
+    // via Firebase Remote Config (`toyyibpay_secret_key`); an empty string is
+    // used as a safe placeholder so calls fail closed rather than leaking a key.
+    return '';
   }
 
   static String get categoryCode {

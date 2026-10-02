@@ -33,6 +33,15 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Google Maps SDK key is injected at build time and never committed.
+        // Supply it either as a Gradle property or an environment variable:
+        //   flutter run -PGOOGLE_MAPS_API_KEY=<key>   (or set env GOOGLE_MAPS_API_KEY)
+        // The Dart layer reads the same value via --dart-define=GOOGLE_MAPS_API_KEY.
+        val googleMapsApiKey: String = (findProperty("GOOGLE_MAPS_API_KEY") as String?)
+            ?: System.getenv("GOOGLE_MAPS_API_KEY")
+            ?: ""
+        manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
     }
 
     buildTypes {

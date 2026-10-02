@@ -26,7 +26,9 @@ void main() {
     test('15.4 ToyyibPay bill creation parameters and callback routing (Requirement 14.4)', () async {
       // Validates that ToyyibPay key-values match the expected Malaysian context settings.
       expect(ToyyibPayService.baseUrl, equals('https://dev.toyyibpay.com/index.php/api'));
-      expect(ToyyibPayService.secretKey, equals('zgwnuduz-sfse-uiuk-u58l-3nyvv4w7lu34'));
+      // Secret is no longer committed; without Remote Config it resolves to the
+      // empty placeholder so the parity check confirms nothing leaks by default.
+      expect(ToyyibPayService.secretKey, equals(''));
       expect(ToyyibPayService.categoryCode, equals('cxtpjaz1'));
       expect(ToyyibPayService.returnUrl, equals('https://drivecareplus.com/payment-return'));
     });

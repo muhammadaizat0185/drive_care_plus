@@ -4,7 +4,10 @@ import 'package:http/http.dart' as http;
 import 'api_tracker_service.dart';
 
 class GoogleMapsService {
-  static const String _apiKey = 'AIzaSyCbAOi4YqBze7HcVNXHuqVUDp9B9HHNRWE';
+  // Injected at build time via `--dart-define=GOOGLE_MAPS_API_KEY=<key>`.
+  // No key is committed to source; resolves to an empty string when the define
+  // is absent so requests fail on the server side instead of exposing a secret.
+  static const String _apiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
 
   // Autocomplete (Places API New)
   static Future<List<dynamic>> getPlacePredictions(String query) async {
